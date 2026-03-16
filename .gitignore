@@ -1,0 +1,17 @@
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 虚拟环境
+venv/
+.venv/
+
+# PyInstaller 打包生成的缓存和结果
+build/
+dist/
+*.spec
+
+# 本地环境配置
+.idea/
+.vscode/
+*.log
