@@ -353,14 +353,15 @@ class GameBotGUI:
             self.wait_for_image(get_path("prepare.png"), timeout=20, confidence=0.5, do_tap=True)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=0.5, do_tap=True)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=0.5, do_tap=True)
-            self.log("第九次位置战斗结束，战斗选项逻辑完成")
+            self.log("第九次位置战斗结束，结界突破完成")
 
         self.log("结界突破整体完成")
+        self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=0.4, do_tap=True)
         return True
 
     def combat_option_logic(self):
         self.combat_option_cycle()
-        self.log("战斗选项逻辑整体完成，自动停止")
+        self.log("结界突破完成，自动停止")
         self.is_running = False
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
@@ -378,9 +379,9 @@ class GameBotGUI:
             self.log("未找到 search.png，结束本轮困难二十八流程")
             return False
 
-        # 进行6次小怪战斗
+        # 进行4次小怪战斗
         fight_count = 0
-        while self.is_running and fight_count < 6:
+        while self.is_running and fight_count < 4:
             if self.wait_for_image(get_path("attack_28.png"), timeout=4, confidence=0.7, do_tap=True):
                 if self.process_finish_mark_300():
                     fight_count += 1
@@ -486,7 +487,6 @@ class GameBotGUI:
                 self.combat_option_cycle()
                 time.sleep(1)
 
-            self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=0.4, do_tap=True)
             self.log("绘卷模式本轮完成，返回选择界面，准备下一轮")
 
         self.is_running = True
