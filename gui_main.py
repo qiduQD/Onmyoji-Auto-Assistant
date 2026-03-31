@@ -476,7 +476,7 @@ class GameBotGUI:
             self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=0.4, do_tap=True)
             self.log("绘卷模式本轮完成，返回选择界面，准备下一轮")
 
-        self.is_running = False
+        self.is_running = True
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
 
