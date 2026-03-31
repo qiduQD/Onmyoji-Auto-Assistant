@@ -202,6 +202,13 @@ class GameBotGUI:
         return subprocess.run(f'"{self.adb_path_entry.get()}" -s {self.device_var.get()} {cmd}', shell=True,
                               capture_output=True)
 
+    def tap_confirm(self):
+        # 为确认按钮提供替代点击：在指定区域随机点击
+        x = random.randint(895, 1045)
+        y = random.randint(480, 520)
+        self.log(f" -> [confirm] 随机点击: ({x}, {y})")
+        self.adb_command(f"shell input tap {x} {y}")
+
     def get_screenshot(self):
         cmd = f'"{self.adb_path_entry.get()}" -s {self.device_var.get()} shell screencap -p'
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
@@ -332,16 +339,16 @@ class GameBotGUI:
 
             # 第九次特殊逻辑 (额外处理)
             self.log("第九次特殊逻辑：4 次返回确认 + 重启 + 准备战斗")
-            for round_i in range(1, 6):
+            for round_i in range(1, 5):
                 if not self.is_running:
                     return False
-                if self.wait_for_image(get_path("back_button_2.png"), timeout=15, confidence=0.4, do_tap=True):
-                    self.wait_for_image(get_path("confirm_button.png"), timeout=10, confidence=0.4, do_tap=True)
-                    self.wait_for_image(get_path("restart.png"), timeout=10, confidence=0.4, do_tap=True)
-                    self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
-                else:
-                    self.log("第九次特殊循环未找到 back_button_2，停止特殊逻辑")
-                    break
+                time.sleep(2)
+                self.adb_command(f"shell input tap {50} {50}")  # 点击左上角返回
+                time.sleep(1)
+                self.adb_command(f"shell input tap {933} {520}")
+                time.sleep(1)
+                self.wait_for_image(get_path("restart.png"), timeout=10, confidence=0.4, do_tap=True)
+                self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
             self.wait_for_image(get_path("prepare.png"), timeout=20, confidence=0.5, do_tap=True)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=0.5, do_tap=True)
@@ -371,10 +378,10 @@ class GameBotGUI:
             self.log("未找到 search.png，结束本轮困难二十八流程")
             return False
 
-        # 进行5次小怪战斗
+        # 进行6次小怪战斗
         fight_count = 0
-        while self.is_running and fight_count < 5:
-            if self.wait_for_image(get_path("attack_28.png"), timeout=4, confidence=0.45, do_tap=True):
+        while self.is_running and fight_count < 6:
+            if self.wait_for_image(get_path("attack_28.png"), timeout=4, confidence=0.7, do_tap=True):
                 if self.process_finish_mark_300():
                     fight_count += 1
                     self.log(f"挑战成功，完成第 {fight_count} 次小怪战斗")
@@ -401,7 +408,8 @@ class GameBotGUI:
         if self.wait_for_image(get_path("takara.png"), timeout=5, confidence=0.6, do_tap=False):
             self.log("找到 takara.png，继续回到 search 流程")
             self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.4, do_tap=True)
-            self.wait_for_image(get_path("confirm_button.png"), timeout=5, confidence=0.4, do_tap=True)
+            time.sleep(1)
+            self.tap_confirm()
             return True
         if self.wait_for_image(get_path("search.png"), timeout=5, confidence=0.4, do_tap=False):
             self.log("5s内未找到 takara，找到 search.png，继续 search 流程")
@@ -411,6 +419,10 @@ class GameBotGUI:
             return True
 
         self.log("takara/search/button_28 均未找到，结束困难二十八流程")
+        self.log("找到 takara.png，继续回到 search 流程")
+        self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.4, do_tap=True)
+        time.sleep(1)
+        self.tap_confirm()
         return False
 
     def hard_28_logic(self):
@@ -462,7 +474,8 @@ class GameBotGUI:
 
             self.log("结界突破卷达标(>=27)，执行返回并确认")
             self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.4, do_tap=True)
-            self.wait_for_image(get_path("confirm_button.png"), timeout=5, confidence=0.4, do_tap=True)
+            time.sleep(1)
+            self.tap_confirm()
             time.sleep(1)
 
             # 结界突破模式循环3次（3次9格=27次战斗）
