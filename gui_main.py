@@ -332,7 +332,7 @@ class GameBotGUI:
 
             # 第九次特殊逻辑 (额外处理)
             self.log("第九次特殊逻辑：4 次返回确认 + 重启 + 准备战斗")
-            for round_i in range(1, 5):
+            for round_i in range(1, 6):
                 if not self.is_running:
                     return False
                 if self.wait_for_image(get_path("back_button_2.png"), timeout=15, confidence=0.4, do_tap=True):
