@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import subprocess
-import random
+import secrets
 import time
 import tkinter as tk
 from tkinter import scrolledtext, ttk
@@ -34,6 +34,7 @@ class GameBotGUI:
         self.root.geometry("800x750")
         self.is_running = False
         self.devices = []
+        self.rng = secrets.SystemRandom()
         self.screen_w = 1600  # 默认值
         self.screen_h = 900  # 默认值
 
@@ -204,10 +205,27 @@ class GameBotGUI:
 
     def tap_confirm(self):
         # 为确认按钮提供替代点击：在指定区域随机点击
-        x = random.randint(895, 1045)
-        y = random.randint(480, 520)
+        x = self.rng.randint(895, 1045)
+        y = self.rng.randint(480, 520)
         self.log(f" -> [confirm] 随机点击: ({x}, {y})")
         self.adb_command(f"shell input tap {x} {y}")
+
+    def tap_confirm_2(self):
+        # 为确认按钮提供替代点击：在指定区域随机点击
+        x = self.rng.randint(880, 975)
+        y = self.rng.randint(505, 545)
+        self.log(f" -> [confirm] 随机点击: ({x}, {y})")
+        self.adb_command(f"shell input tap {x} {y}")
+    
+    def tap_cancel(self):
+        # 为取消按钮提供替代点击：在指定区域随机点击
+        x = self.rng.randint(30, 60)
+        y = self.rng.randint(30, 60)
+        self.log(f" -> [cancel] 随机点击: ({x}, {y})")
+        self.adb_command(f"shell input tap {x} {y}")
+
+    def random_in_offset(self, base, offset=30):
+        return self.rng.randint(base - offset, base + offset)
 
     def get_screenshot(self):
         cmd = f'"{self.adb_path_entry.get()}" -s {self.device_var.get()} shell screencap -p'
@@ -218,8 +236,8 @@ class GameBotGUI:
 
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
-        tx = random.randint(int(self.screen_w * 0.3), int(self.screen_w * 0.7))
-        ty = random.randint(int(self.screen_h * 0.4), int(self.screen_h * 0.8))
+        tx = self.rng.randint(int(self.screen_w * 0.3), int(self.screen_w * 0.7))
+        ty = self.rng.randint(int(self.screen_h * 0.4), int(self.screen_h * 0.8))
         self.log(f" -> [清理中] 随机点击: ({tx}, {ty})")
         self.adb_command(f"shell input tap {tx} {ty}")
 
@@ -250,8 +268,8 @@ class GameBotGUI:
         if max_val >= confidence:
             if do_tap:
                 mw, mh = int(w * 0.1), int(h * 0.1)
-                tx = random.randint(max_loc[0] + mw, max_loc[0] + w - mw)
-                ty = random.randint(max_loc[1] + mh, max_loc[1] + h - mh)
+                tx = self.rng.randint(max_loc[0] + mw, max_loc[0] + w - mw)
+                ty = self.rng.randint(max_loc[1] + mh, max_loc[1] + h - mh)
                 self.adb_command(f"shell input tap {tx} {ty}")
                 # 使用 os.path.basename 只显示文件名，不显示长路径
                 self.log(f"命中: {os.path.basename(template_path)} ({max_val:.2f})")
@@ -307,10 +325,16 @@ class GameBotGUI:
             return False
         time.sleep(3)
 
-        xs = [523, 931, 1325]
-        ys = [584, 403, 243]
-        slots = [(x, y) for x in xs for y in ys]
-        random.shuffle(slots)
+        base_slots = [
+            (523, 584), (931, 584), (1325, 584),
+            (523, 403), (931, 403), (1325, 403),
+            (523, 243), (931, 243), (1325, 243)
+        ]
+        slots = [
+            (self.random_in_offset(x, 30), self.random_in_offset(y, 30))
+            for x, y in base_slots
+        ]
+        self.rng.shuffle(slots)
         self.log(f"已随机组合九个战斗位置: {slots}")
 
         for idx, (x, y) in enumerate(slots, start=1):
@@ -343,19 +367,21 @@ class GameBotGUI:
                 if not self.is_running:
                     return False
                 time.sleep(2)
-                self.adb_command(f"shell input tap {50} {50}")  # 点击左上角返回
+                self.tap_cancel()  # 点击左上角返回
                 time.sleep(1)
-                self.adb_command(f"shell input tap {933} {520}")
+                self.tap_confirm_2()  # 点击确认返回
                 time.sleep(1)
-                self.wait_for_image(get_path("restart.png"), timeout=10, confidence=0.4, do_tap=True)
+                self.wait_for_image(get_path("restart.png"), timeout=10, confidence=0.5, do_tap=True)
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
             self.wait_for_image(get_path("prepare.png"), timeout=20, confidence=0.5, do_tap=True)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=0.5, do_tap=True)
-            self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=0.5, do_tap=True)
+            time.sleep(1.2)
+            self.wait_for_image(get_path("finish_mark_300.png"), timeout=2, confidence=0.5, do_tap=True)
             self.log("第九次位置战斗结束，结界突破完成")
 
         self.log("结界突破整体完成")
+        time.sleep(1)
         self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=0.4, do_tap=True)
         return True
 
@@ -586,7 +612,7 @@ class GameBotGUI:
                             self.log(f"第 {self.count} 轮结束，回到主界面")
                             break
                         self.full_screen_random_tap()
-                        time.sleep(random.uniform(1.0, 1.5))
+                        time.sleep(self.rng.uniform(1.0, 1.5))
                     break  # 跳出战斗监控循环
 
                 # 超_时/挂机处理
