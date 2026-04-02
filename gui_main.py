@@ -386,8 +386,13 @@ class GameBotGUI:
         return True
 
     def combat_option_logic(self):
-        self.combat_option_cycle()
-        self.log("结界突破完成，自动停止")
+        for i in range(3):
+                if not self.is_running:
+                    break
+                self.log(f"第 {i+1} 次结界突破循环")
+                self.combat_option_cycle()
+                time.sleep(1)
+        self.log("结界突破卷清理完成，自动停止")
         self.is_running = False
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
