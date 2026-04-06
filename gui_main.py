@@ -237,7 +237,7 @@ class GameBotGUI:
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
         tx = self.rng.randint(int(self.screen_w * 0.3), int(self.screen_w * 0.7))
-        ty = self.rng.randint(int(self.screen_h * 0.4), int(self.screen_h * 0.8))
+        ty = self.rng.randint(int(self.screen_h * 0.5), int(self.screen_h * 0.8))
         self.log(f" -> [清理中] 随机点击: ({tx}, {ty})")
         self.adb_command(f"shell input tap {tx} {ty}")
 
@@ -609,6 +609,8 @@ class GameBotGUI:
                 # 核心修改：这里使用该关卡专属的结算图 current_end_img
                 if self.find_and_tap(current_end_img, confidence=0.5):
                     self.log(f"检测到【{selected_level_name}】专属结算图标...")
+                    self.full_screen_random_tap()
+                    time.sleep(self.rng.uniform(1.0, 1.5))
                     while self.is_running:
                         # --- 修正点 1：使用变量 current_start_img 而非死代码 ---
                         if self.find_and_tap(current_start_img, confidence=conf_val, do_tap=False):
@@ -616,8 +618,7 @@ class GameBotGUI:
                             self.count_label.config(text=f"已成功运行: {self.count} 轮")
                             self.log(f"第 {self.count} 轮结束，回到主界面")
                             break
-                        self.full_screen_random_tap()
-                        time.sleep(self.rng.uniform(1.0, 1.5))
+                        
                     break  # 跳出战斗监控循环
 
                 # 超_时/挂机处理
