@@ -508,6 +508,37 @@ class GameBotGUI:
 
         return best_val, best_loc, best_size
 
+    def find_and_tap_on_capture(self, template_path, screen, rect, confidence=0.5, do_tap=True):
+        template = cv2.imread(template_path)
+
+        if template is None:
+            self.log(f"错误：无法读取资源文件 -> {os.path.basename(template_path)}")
+            return False
+
+        if screen is None or rect is None:
+            return False
+
+        max_val, max_loc, matched_size = self.match_template_in_window(screen, template)
+        if max_loc is None or matched_size is None:
+            return False
+
+        if max_val >= confidence:
+            if do_tap:
+                matched_w, matched_h = matched_size
+                mw, mh = max(1, int(matched_w * 0.1)), max(1, int(matched_h * 0.1))
+                tx_min = max_loc[0] + mw
+                tx_max = max_loc[0] + max(mw, matched_w - mw)
+                ty_min = max_loc[1] + mh
+                ty_max = max_loc[1] + max(mh, matched_h - mh)
+                tx = self.rng.randint(tx_min, tx_max)
+                ty = self.rng.randint(ty_min, ty_max)
+
+                click_x, click_y = self.map_capture_point_to_window(tx, ty, screen.shape[1], screen.shape[0], rect)
+                self.click_abs(click_x, click_y)
+                self.log(f"命中: {os.path.basename(template_path)} ({max_val:.2f})")
+            return True
+        return False
+
     def capture_target_window(self):
         info = self.get_target_window_snapshot()
         if info is None:
@@ -662,22 +693,8 @@ class GameBotGUI:
         return True
 
     def tap_confirm(self):
-        x = self.rng.randint(self.scale_x(895), self.scale_x(1045))
-        y = self.rng.randint(self.scale_y(480), self.scale_y(520))
-        self.log(f" -> [confirm] 随机点击: ({x}, {y})")
-        self.click_abs(x, y)
+        self.wait_for_image(get_path("confirm_button_2.png"), timeout=10, confidence=0.5, do_tap=True)
 
-    def tap_confirm_2(self):
-        x = self.rng.randint(self.scale_x(880), self.scale_x(975))
-        y = self.rng.randint(self.scale_y(540), self.scale_y(570))
-        self.log(f" -> [confirm] 随机点击: ({x}, {y})")
-        self.click_abs(x, y)
-    
-    def tap_cancel(self):
-        x = self.rng.randint(self.scale_x(166), self.scale_x(190))
-        y = self.rng.randint(self.scale_y(92), self.scale_y(112))
-        self.log(f" -> [cancel] 随机点击: ({x}, {y})")
-        self.click_abs(x, y)
 
     def random_in_offset(self, base, offset=30):
         return self.rng.randint(base - offset, base + offset)
@@ -696,47 +713,19 @@ class GameBotGUI:
         self.drag_abs(x1, y, x2, y, steps=14)
         time.sleep(0.8)
 
-    def find_and_tap(self, template_path, confidence=0.5, do_tap=True):
-        template = cv2.imread(template_path)
-
-        if template is None:
-            self.log(f"错误：无法读取资源文件 -> {os.path.basename(template_path)}")
-            return False
-
-        screen, rect = self.capture_target_window()
+    def find_and_tap(self, template_path, confidence=0.5, do_tap=True, screen=None, rect=None):
         if screen is None or rect is None:
-            return False
-
-        h, w = template.shape[:2]
-        max_val, max_loc, matched_size = self.match_template_in_window(screen, template)
-        if max_loc is None or matched_size is None:
-            return False
-
-        if max_val >= confidence:
-            if do_tap:
-                matched_w, matched_h = matched_size
-                mw, mh = max(1, int(matched_w * 0.1)), max(1, int(matched_h * 0.1))
-                tx_min = max_loc[0] + mw
-                tx_max = max_loc[0] + max(mw, matched_w - mw)
-                ty_min = max_loc[1] + mh
-                ty_max = max_loc[1] + max(mh, matched_h - mh)
-                tx = self.rng.randint(tx_min, tx_max)
-                ty = self.rng.randint(ty_min, ty_max)
-
-                click_x, click_y = self.map_capture_point_to_window(tx, ty, screen.shape[1], screen.shape[0], rect)
-                self.click_abs(click_x, click_y)
-                # 使用 os.path.basename 只显示文件名，不显示长路径
-                self.log(f"命中: {os.path.basename(template_path)} ({max_val:.2f})")
-            return True
-        return False
+            screen, rect = self.capture_target_window()
+        return self.find_and_tap_on_capture(template_path, screen, rect, confidence=confidence, do_tap=do_tap)
 
     def wait_for_image(self, template_path, timeout=20, confidence=0.5, do_tap=False, interval=0.35):
         start_t = time.time()
         while self.is_running and time.time() - start_t < timeout:
-            if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
+            screen, rect = self.capture_target_window()
+            if self.find_and_tap_on_capture(template_path, screen, rect, confidence=confidence, do_tap=False):
                 if do_tap:
                     time.sleep(0.5)  # 发现目标后先等 0.5 秒再点击
-                    self.find_and_tap(template_path, confidence=confidence, do_tap=True)
+                    self.find_and_tap_on_capture(template_path, screen, rect, confidence=confidence, do_tap=True)
                 return True
             time.sleep(interval)
         self.log(f"等待超时: {os.path.basename(template_path)}")
@@ -753,22 +742,22 @@ class GameBotGUI:
         mark = get_path("finish_mark_300.png")
 
         # 先发现结算标记，不立刻点击
-        if not self.wait_for_image(mark, timeout=15, confidence=0.5, do_tap=False):
+        if not self.wait_for_image(mark, timeout=15, confidence=0.7, do_tap=False):
             self.log("未检测到 finish_mark_300")
             return False
 
         self.log("发现 finish_mark_300，开始扫描 ken.png 以确认掉落")
 
         # 3s 内找到 ken.png：+1 卷, 继续点击 finish_mark_300；未找到则结束本次流程
-        if self.wait_for_image(get_path("ken.png"), timeout=3, confidence=0.5, do_tap=False):
+        if self.wait_for_image(get_path("ken.png"), timeout=3, confidence=0.7, do_tap=False):
             self.log("扫描到 ken.png，结界突破卷 +1")
             self.increment_break_roll()
-            self.wait_for_image(mark, timeout=5, confidence=0.5, do_tap=True)
+            self.wait_for_image(mark, timeout=5, confidence=0.7, do_tap=True)
             self.log("点击 finish_mark_300 完成结算")
             return True
         else:
             self.log("3s 内未扫描到 ken.png，退出本轮结算流程")
-            self.wait_for_image(mark, timeout=5, confidence=0.5, do_tap=True)
+            self.wait_for_image(mark, timeout=5, confidence=0.7, do_tap=True)
             self.log("点击 finish_mark_300 完成结算")
             return True
 
@@ -809,11 +798,11 @@ class GameBotGUI:
                 continue
 
             # 普通8次逻辑
-            if idx > 9:
-                self.wait_for_image(get_path("prepare.png"), timeout=20, confidence=0.6, do_tap=True)
-                self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=0.5, do_tap=True)
+            if idx < 9:
+                self.wait_for_image(get_path("prepare.png"), timeout=20, confidence=0.7, do_tap=True)
+                self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=0.7, do_tap=True)
                 time.sleep(2)
-                self.wait_for_image(get_path("finish_mark_300.png"), timeout=2, confidence=0.5, do_tap=True)
+                self.wait_for_image(get_path("finish_mark_300.png"), timeout=2, confidence=0.7, do_tap=True)
                 self.log(f"第 {idx} 次位置战斗结束，继续下一个位置")
                 time.sleep(2)
                 continue
@@ -824,22 +813,22 @@ class GameBotGUI:
                 if not self.is_running:
                     return False
                 time.sleep(2)
-                self.tap_cancel()  # 点击左上角返回
+                self.wait_for_image(get_path("back_button_2.png"), timeout=10, confidence=0.7, do_tap=True) # 点击左上角返回
                 time.sleep(1)
-                self.tap_confirm_2()  # 点击确认返回
+                self.wait_for_image(get_path("confirm_button.png"), timeout=10, confidence=0.7, do_tap=True)# 点击确认返回
                 time.sleep(1)
-                self.wait_for_image(get_path("restart.png"), timeout=10, confidence=0.5, do_tap=True)
+                self.wait_for_image(get_path("restart.png"), timeout=10, confidence=0.7, do_tap=True)
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
-            self.wait_for_image(get_path("prepare.png"), timeout=20, confidence=0.6, do_tap=True)
-            self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=0.6, do_tap=True)
+            self.wait_for_image(get_path("prepare.png"), timeout=20, confidence=0.7, do_tap=True)
+            self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=0.7, do_tap=True)
             time.sleep(2)
-            self.wait_for_image(get_path("finish_mark_300.png"), timeout=2, confidence=0.6, do_tap=True)
+            self.wait_for_image(get_path("finish_mark_300.png"), timeout=2, confidence=0.7, do_tap=True)
             self.log("第九次位置战斗结束，结界突破完成")
 
         self.log("结界突破整体完成")
         time.sleep(1)
-        self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=0.6, do_tap=True)
+        self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=0.7, do_tap=True)
         return True
 
     def combat_option_logic(self):
@@ -870,7 +859,7 @@ class GameBotGUI:
         # 进行4次小怪战斗
         fight_count = 0
         while self.is_running and fight_count < 4:
-            if self.wait_for_image(get_path("attack_28.png"), timeout=4, confidence=0.7, do_tap=True):
+            if self.find_and_tap(get_path("attack_28.png"), confidence=0.7, do_tap=True):
                 if self.process_finish_mark_300():
                     fight_count += 1
                     self.log(f"挑战成功，完成第 {fight_count} 次小怪战斗")
