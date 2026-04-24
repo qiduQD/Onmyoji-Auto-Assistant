@@ -29,7 +29,8 @@ class GameBotGUI:
         self.root = root
         self.root.title("痒痒鼠小助手 mac版")
         self.is_mac = sys.platform == "darwin"
-        self.root.geometry("820x720")
+        self.root.geometry("1320x760")
+        self.root.minsize(1200, 720)
         self.is_running = False
         self.rng = secrets.SystemRandom()
         self.window_x = 0
@@ -106,24 +107,24 @@ class GameBotGUI:
         # 4. 控制按钮
         self.btn_frame = tk.Frame(root)
         self.btn_frame.pack(pady=15)
-        self.start_btn = tk.Button(self.btn_frame, text="开始挂机", command=self.start_task, bg="#4CAF50", fg="white",
+        self.start_btn = tk.Button(self.btn_frame, text="开始挂机", command=self.start_task, bg="#4CAF50", fg="black",
                                    width=15)
         self.start_btn.grid(row=0, column=0, padx=10)
         self.stop_btn = tk.Button(self.btn_frame, text="停止运行", command=self.stop_task, state=tk.DISABLED,
                                   bg="#F44336", fg="white", width=15)
         self.stop_btn.grid(row=0, column=1, padx=10)
-        self.combat_btn = tk.Button(self.btn_frame, text="结界突破", command=self.start_combat_option, bg="#2196F3", fg="white", width=15)
+        self.combat_btn = tk.Button(self.btn_frame, text="结界突破", command=self.start_combat_option, bg="#2196F3", fg="black", width=15)
         self.combat_btn.grid(row=0, column=2, padx=10)
-        self.hard28_btn = tk.Button(self.btn_frame, text="困难二十八", command=self.start_hard_28, bg="#FF9800", fg="white", width=15)
+        self.hard28_btn = tk.Button(self.btn_frame, text="困难二十八", command=self.start_hard_28, bg="#FF9800", fg="black", width=15)
         self.hard28_btn.grid(row=0, column=3, padx=10)
-        self.draw_roll_btn = tk.Button(self.btn_frame, text="绘卷模式", command=self.start_draw_roll, bg="#9C27B0", fg="white", width=15)
+        self.draw_roll_btn = tk.Button(self.btn_frame, text="绘卷模式", command=self.start_draw_roll, bg="#9C27B0", fg="black", width=15)
         self.draw_roll_btn.grid(row=0, column=4, padx=10)
         self.mac_scan_btn = tk.Button(
             self.btn_frame,
             text="识别点击",
             command=self.start_mac_app_click,
             bg="#607D8B",
-            fg="white",
+            fg="black",
             width=15
         )
         self.mac_scan_btn.grid(row=0, column=5, padx=10)
@@ -147,7 +148,7 @@ class GameBotGUI:
 
         # 5. 日志窗口
         tk.Label(root, text="运行日志:").pack()
-        self.log_area = scrolledtext.ScrolledText(root, width=75, height=25, font=("Consolas", 9))
+        self.log_area = scrolledtext.ScrolledText(root, width=128, height=25, font=("Consolas", 9))
         self.log_area.pack(pady=10)
 
         if self.is_mac:
