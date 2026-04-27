@@ -9,6 +9,7 @@ import threading
 import re
 import sys
 import os
+import platform
 
 
 def get_path(relative_path):
@@ -19,15 +20,64 @@ def get_path(relative_path):
     # 源码运行时的路径：当前目录 + assets + 文件名
     base_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_dir, "assets", relative_path)
+
+
+def get_default_adb_candidates():
+    """根据系统返回可能存在的 adb 路径候选（按优先级）。"""
+    system_name = platform.system()
+    if system_name == "Darwin":
+        # macOS 下直接使用 PATH 中的 adb
+        return ["adb"]
+
+    candidates = [
+        get_path("adb"),
+        get_path("adb.exe")
+    ]
+
+    if system_name == "Windows":
+        candidates.extend([
+            r"C:\Program Files\Netease\MuMu\nx_device\12.0\shell\adb.exe",
+            "adb.exe"
+        ])
+    else:
+        candidates.extend([
+            "/usr/bin/adb",
+            "/usr/local/bin/adb",
+            os.path.expanduser("~/Android/Sdk/platform-tools/adb"),
+            "adb"
+        ])
+
+    # 保持顺序并去重
+    uniq = []
+    seen = set()
+    for p in candidates:
+        if p not in seen:
+            uniq.append(p)
+            seen.add(p)
+    return uniq
+
+
 class GameBotGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("痒痒鼠小助手 v1.2")
-        # --- 新增：设置窗口左上角图标 ---
+        # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
-            # 同样需要 get_path 来确保打包后能找到图标
-            icon_path = get_path("app.ico")
-            self.root.iconbitmap(icon_path)
+            if platform.system() == "Windows":
+                icon_path = get_path("app.ico")
+                self.root.iconbitmap(icon_path)
+            else:
+                # Tk 在 macOS 上对 .ico 支持有限，优先尝试 png 作为窗口图标
+                icon_png = get_path("app.png")
+                if os.path.exists(icon_png):
+                    icon_img = tk.PhotoImage(file=icon_png)
+                    self.root.iconphoto(True, icon_img)
+                    # 保留引用，避免被垃圾回收导致图标失效
+                    self._icon_img = icon_img
+                else:
+                    icon_ico = get_path("app.ico")
+                    if os.path.exists(icon_ico):
+                        self.root.iconbitmap(icon_ico)
         except Exception as e:
             # 如果没有图标文件，程序也会正常运行，不会崩溃
             print(f"窗口图标加载失败: {e}")
@@ -42,20 +92,20 @@ class GameBotGUI:
         # 1. ADB 路径
         tk.Label(root, text="ADB 路径:", font=("微软雅黑", 9)).pack(pady=2)
         self.adb_path_entry = tk.Entry(root, width=60)
-        possible_adb_paths = [
-            get_path("adb.exe"),  # 优先找打包在 assets 里的通用 ADB
-            r"C:\Program Files\Netease\MuMu\nx_device\12.0\shell\adb.exe",  # 备选 MuMu 路径
-            "adb.exe"  # 最后的兜底：尝试调用系统环境变量
-        ]
+        possible_adb_paths = get_default_adb_candidates()
 
         selected_adb = ""
         for p in possible_adb_paths:
+            # 允许直接使用 PATH 中的 adb 命令
+            if p in ("adb", "adb.exe"):
+                selected_adb = p
+                break
             if os.path.exists(p):
                 selected_adb = p
                 break
 
         self.adb_path_entry = tk.Entry(root, width=60)
-        self.adb_path_entry.insert(0, selected_adb if selected_adb else "请手动指定 adb.exe 路径")
+        self.adb_path_entry.insert(0, selected_adb if selected_adb else "请手动指定 adb 路径")
         self.adb_path_entry.pack()
         # 关卡名称与对应图片文件的映射
         self.level_map = {
@@ -114,17 +164,17 @@ class GameBotGUI:
         # 4. 控制按钮
         self.btn_frame = tk.Frame(root)
         self.btn_frame.pack(pady=15)
-        self.start_btn = tk.Button(self.btn_frame, text="开始挂机", command=self.start_task, bg="#4CAF50", fg="white",
+        self.start_btn = tk.Button(self.btn_frame, text="开始挂机", command=self.start_task, bg="#4CAF50", fg="black",
                                    width=15)
         self.start_btn.grid(row=0, column=0, padx=10)
         self.stop_btn = tk.Button(self.btn_frame, text="停止运行", command=self.stop_task, state=tk.DISABLED,
-                                  bg="#F44336", fg="white", width=15)
+                                  bg="#F44336", fg="black", width=15)
         self.stop_btn.grid(row=0, column=1, padx=10)
-        self.combat_btn = tk.Button(self.btn_frame, text="结界突破", command=self.start_combat_option, bg="#2196F3", fg="white", width=15)
+        self.combat_btn = tk.Button(self.btn_frame, text="结界突破", command=self.start_combat_option, bg="#2196F3", fg="black", width=15)
         self.combat_btn.grid(row=0, column=2, padx=10)
-        self.hard28_btn = tk.Button(self.btn_frame, text="困难二十八", command=self.start_hard_28, bg="#FF9800", fg="white", width=15)
+        self.hard28_btn = tk.Button(self.btn_frame, text="困难二十八", command=self.start_hard_28, bg="#FF9800", fg="black", width=15)
         self.hard28_btn.grid(row=0, column=3, padx=10)
-        self.draw_roll_btn = tk.Button(self.btn_frame, text="绘卷模式", command=self.start_draw_roll, bg="#9C27B0", fg="white", width=15)
+        self.draw_roll_btn = tk.Button(self.btn_frame, text="绘卷模式", command=self.start_draw_roll, bg="#9C27B0", fg="black", width=15)
         self.draw_roll_btn.grid(row=0, column=4, padx=10)
         self.count = 0  # 初始轮次为 0
         self.break_roll_count = 0  # 结界突破卷计数
