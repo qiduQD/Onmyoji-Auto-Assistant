@@ -176,6 +176,8 @@ class GameBotGUI:
         self.hard28_btn.grid(row=0, column=3, padx=10)
         self.draw_roll_btn = tk.Button(self.btn_frame, text="绘卷模式", command=self.start_draw_roll, bg="#9C27B0", fg="black", width=15)
         self.draw_roll_btn.grid(row=0, column=4, padx=10)
+        self.combat8_btn = tk.Button(self.btn_frame, text="阴阳寮突破", command=self.start_combat_option_8, bg="#607D8B", fg="black", width=15)
+        self.combat8_btn.grid(row=1, column=2, padx=10, pady=8)
         self.count = 0  # 初始轮次为 0
         self.break_roll_count = 0  # 结界突破卷计数
         self.count_label = tk.Label(root, text="已成功运行: 0 轮", font=("微软雅黑", 12, "bold"), fg="#1E90FF")
@@ -287,7 +289,7 @@ class GameBotGUI:
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
         tx = self.rng.randint(int(self.screen_w * 0.3), int(self.screen_w * 0.7))
-        ty = self.rng.randint(int(self.screen_h * 0.5), int(self.screen_h * 0.8))
+        ty = self.rng.randint(40, 460)
         self.log(f" -> [清理中] 随机点击: ({tx}, {ty})")
         self.adb_command(f"shell input tap {tx} {ty}")
 
@@ -298,6 +300,15 @@ class GameBotGUI:
         y = int(self.screen_h * 0.5)
         self.log(f" -> [刷新] 左滑屏幕: ({x1},{y}) -> ({x2},{y})")
         self.adb_command(f"shell input swipe {x1} {y} {x2} {y} 300")
+        time.sleep(0.8)
+
+    def swipe_up_full(self):
+        # 每轮结束后上滑刷新目标列表
+        x = int(self.screen_w * 0.5)
+        y1 = int(self.screen_h * 0.78)
+        y2 = int(self.screen_h * 0.30)
+        self.log(f" -> [刷新] 上滑屏幕: ({x},{y1}) -> ({x},{y2})")
+        self.adb_command(f"shell input swipe {x} {y1} {x} {y2} 350")
         time.sleep(0.8)
 
     def find_and_tap(self, template_path, confidence=0.5, do_tap=True):
@@ -447,6 +458,103 @@ class GameBotGUI:
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
 
+    def combat_option_8_cycle(self):
+        base_slots = [
+            (815, 220), (1235, 220), (815, 400),(1235, 400),(815, 560), (1235, 560), (815, 720),(1235, 720)
+        ]
+        self.log(f"按顺序执行八个战斗位置: {base_slots}")
+
+        for idx, (base_x, base_y) in enumerate(base_slots, start=1):
+            if not self.is_running:
+                self.log("脚本已停止，退出阴阳寮突破。")
+                return False
+            
+
+            fail_count = 0
+            fail_img = get_path("restart.png")
+            finish_img = get_path("finish_mark_300.png")
+            while self.is_running:
+                x = self.random_in_offset(base_x, 30)
+                y = self.random_in_offset(base_y, 30)
+                self.log(f"寮突模式第 {idx} 个位置继续 attack: ({x},{y})")
+                self.adb_command(f"shell input tap {x} {y}")
+                time.sleep(1.2)
+
+                if not self.wait_for_image(get_path("attack.png"), timeout=12, confidence=0.45, do_tap=True):
+                    fail_count += 1
+                    self.log(f"第 {idx} 个位置检测到 attack 失败，准备切换到下一个位置")
+                    break
+
+                # 同时轮询 fail 与 finish：finish 继续当前坐标，fail 或 finish 超时则切换坐标
+                fight_timeout = 120
+                start_t = time.time()
+                finish_detected = False
+                while self.is_running and time.time() - start_t < fight_timeout:
+                    if self.find_and_tap(fail_img, confidence=0.5, do_tap=False):
+                        self.full_screen_random_tap()  # 检测到 fail 就随机点击清理一下，增加下一轮检测的成功率
+                        fail_count += 1
+                        self.log(f"第 {idx} 个位置失败，准备切换到下一个位置")
+                        time.sleep(1.5)
+                        break
+
+                    if self.find_and_tap(finish_img, confidence=0.5, do_tap=False):
+                        time.sleep(0.5)
+                        self.find_and_tap(finish_img, confidence=0.5, do_tap=True)
+                        finish_detected = True
+                        time.sleep(1.4)
+                        break
+
+                    time.sleep(0.6)
+
+                if fail_count > 0:
+                    break
+
+                if not finish_detected:
+                    fail_count += 1
+                    self.log(f"第 {idx} 个位置检测 finish_mark_300 超时，按失败处理")
+                    break
+
+                time.sleep(1.2)
+
+            if fail_count == 0:
+                self.log(f"寮突模式第 {idx} 个位置已完成并切换")
+            time.sleep(1)
+
+        self.log("阴阳寮突破本轮完成")
+        time.sleep(1)
+        self.swipe_up_full()
+        return True
+
+    def combat_option_8_logic(self):
+        # 获取当前目标轮数（0 表示无限）
+        try:
+            target_limit = int(self.limit_var.get())
+        except ValueError:
+            target_limit = 0
+            self.log("目标轮数格式错误，已默认为无限模式")
+
+        round_count = 0
+        while self.is_running:
+            if target_limit > 0 and round_count >= target_limit:
+                self.log(f"阴阳寮突破已达到目标轮数 {target_limit}，自动停止")
+                break
+
+            self.log(f"阴阳寮突破第 {round_count + 1} 轮开始")
+            if self.combat_option_8_cycle():
+                round_count += 1
+                self.count = round_count
+                self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                self.log(f"阴阳寮突破第 {round_count} 轮结束")
+            else:
+                self.log("阴阳寮突破本轮未完成，准备重试")
+
+            time.sleep(1)
+
+        self.log("阴阳寮突破流程结束")
+        self.is_running = False
+        self.start_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+
     def hard_28_cycle(self):
         self.log("开始一轮困难二十八流程：button_28 -> search -> 小怪4次 -> boss -> takara/search/button_28")
 
@@ -584,6 +692,19 @@ class GameBotGUI:
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
         threading.Thread(target=self.combat_option_logic, daemon=True).start()
+
+    def start_combat_option_8(self):
+        if not self.device_var.get():
+            messagebox.showwarning("警告", "请先选择一个设备！")
+            return
+
+        self.update_screen_size()
+        self.count = 0
+        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+        self.is_running = True
+        self.start_btn.config(state=tk.DISABLED)
+        self.stop_btn.config(state=tk.NORMAL)
+        threading.Thread(target=self.combat_option_8_logic, daemon=True).start()
 
     def start_hard_28(self):
         if not self.device_var.get():
