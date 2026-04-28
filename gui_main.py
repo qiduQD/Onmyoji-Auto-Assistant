@@ -119,6 +119,8 @@ class GameBotGUI:
         self.hard28_btn.grid(row=0, column=3, padx=10)
         self.draw_roll_btn = tk.Button(self.btn_frame, text="绘卷模式", command=self.start_draw_roll, bg="#9C27B0", fg="black", width=15)
         self.draw_roll_btn.grid(row=0, column=4, padx=10)
+        self.combat8_btn = tk.Button(self.btn_frame, text="阴阳寮突破", command=self.start_combat_option_8, bg="#607D8B", fg="black", width=15)
+        self.combat8_btn.grid(row=1, column=2, padx=10, pady=8)
         self.mac_scan_btn = tk.Button(
             self.btn_frame,
             text="识别点击",
@@ -648,6 +650,49 @@ class GameBotGUI:
         if code == 0:
             return True
 
+
+    def adb_command(self, cmd: str):
+        """在非 macOS 平台调用 adb；在 macOS 下将常见的 `shell input tap x y` 转为本地点击。
+
+        返回: (returncode, stdout, stderr) 或在 mac 下返回 (0, "", "") 表示成功。
+        """
+        if not cmd:
+            return -1, "", "empty-cmd"
+
+        # 处理 macOS：将 adb 的 tap 映射为本地点击
+        try:
+            parts = cmd.strip().split()
+        except Exception:
+            parts = []
+
+        if self.is_mac:
+            # 支持: shell input tap x y
+            if len(parts) >= 4 and parts[0] == "shell" and parts[1] == "input" and parts[2] == "tap":
+                try:
+                    x = int(parts[3])
+                    y = int(parts[4]) if len(parts) > 4 else 0
+                except Exception:
+                    self.log(f"adb_command: 无法解析坐标: {cmd}")
+                    return -1, "", "parse-error"
+                self.log(f"(mac) 模拟 adb tap -> 本地点击: ({x},{y})")
+                ok = self.click_abs(x, y)
+                return (0, "", "") if ok else (-1, "", "click-failed")
+
+        # 其它平台：尝试执行 adb 命令
+        full_cmd = ["adb"] + cmd.strip().split()
+        try:
+            proc = subprocess.run(full_cmd, capture_output=True, text=True, timeout=20)
+            out = proc.stdout.strip()
+            err = proc.stderr.strip()
+            if proc.returncode != 0:
+                self.log(f"adb_command 失败: {' '.join(full_cmd)} -> {err}")
+            return proc.returncode, out, err
+        except FileNotFoundError:
+            self.log("adb 未找到，请确保已安装并在 PATH 中。")
+            return -1, "", "adb-not-found"
+        except Exception as e:
+            self.log(f"adb_command 异常: {e}")
+            return -1, "", str(e)
         # 兜底: AppleScript click at
         fallback = f'tell application "System Events" to click at {{{x}, {y}}}'
         code2, _, err2 = self._run_osascript(fallback)
@@ -844,6 +889,103 @@ class GameBotGUI:
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
 
+    def combat_option_8_cycle(self):
+        base_slots = [
+            (740, 300), (1140, 300), (740, 450), (1140, 450), (740, 585), (1140, 585), (740, 720), (1140, 720)
+        ]
+        self.log(f"按顺序执行八个战斗位置: {base_slots}")
+
+        for idx, (base_x, base_y) in enumerate(base_slots, start=1):
+            if not self.is_running:
+                self.log("脚本已停止，退出阴阳寮突破。")
+                return False
+            
+
+            fail_count = 0
+            fail_img = get_path("restart.png")
+            finish_img = get_path("finish_mark_300.png")
+            while self.is_running:
+                x = self.random_in_offset(base_x, 30)
+                y = self.random_in_offset(base_y, 30)
+                self.log(f"寮突模式第 {idx} 个位置继续 attack: ({x},{y})")
+                self.adb_command(f"shell input tap {x} {y}")
+                time.sleep(1.2)
+
+                if not self.wait_for_image(get_path("attack.png"), timeout=12, confidence=0.45, do_tap=True):
+                    fail_count += 1
+                    self.log(f"第 {idx} 个位置检测到 attack 失败，准备切换到下一个位置")
+                    break
+
+                # 同时轮询 fail 与 finish：finish 继续当前坐标，fail 或 finish 超时则切换坐标
+                fight_timeout = 120
+                start_t = time.time()
+                finish_detected = False
+                while self.is_running and time.time() - start_t < fight_timeout:
+                    if self.find_and_tap(fail_img, confidence=0.5, do_tap=False):
+                        self.full_screen_random_tap()  # 检测到 fail 就随机点击清理一下，增加下一轮检测的成功率
+                        fail_count += 1
+                        self.log(f"第 {idx} 个位置失败，准备切换到下一个位置")
+                        time.sleep(1.5)
+                        break
+
+                    if self.find_and_tap(finish_img, confidence=0.5, do_tap=False):
+                        time.sleep(0.5)
+                        self.find_and_tap(finish_img, confidence=0.5, do_tap=True)
+                        finish_detected = True
+                        time.sleep(1.4)
+                        break
+
+                    time.sleep(0.6)
+
+                if fail_count > 0:
+                    break
+
+                if not finish_detected:
+                    fail_count += 1
+                    self.log(f"第 {idx} 个位置检测 finish_mark_300 超时，按失败处理")
+                    break
+
+                time.sleep(1.2)
+
+            if fail_count == 0:
+                self.log(f"寮突模式第 {idx} 个位置已完成并切换")
+            time.sleep(1)
+
+        self.log("阴阳寮突破本轮完成")
+        time.sleep(1)
+        self.swipe_up_full()
+        return True
+    
+    def combat_option_8_logic(self):
+        # 获取当前目标轮数（0 表示无限）
+        try:
+            target_limit = int(self.limit_var.get())
+        except ValueError:
+            target_limit = 0
+            self.log("目标轮数格式错误，已默认为无限模式")
+
+        round_count = 0
+        while self.is_running:
+            if target_limit > 0 and round_count >= target_limit:
+                self.log(f"阴阳寮突破已达到目标轮数 {target_limit}，自动停止")
+                break
+
+            self.log(f"阴阳寮突破第 {round_count + 1} 轮开始")
+            if self.combat_option_8_cycle():
+                round_count += 1
+                self.count = round_count
+                self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                self.log(f"阴阳寮突破第 {round_count} 轮结束")
+            else:
+                self.log("阴阳寮突破本轮未完成，准备重试")
+
+            time.sleep(1)
+
+        self.log("阴阳寮突破流程结束")
+        self.is_running = False
+        self.start_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+
     def hard_28_cycle(self):
         self.log("开始一轮困难二十八流程：button_28 -> search -> 小怪4次 -> boss -> takara/search/button_28")
 
@@ -981,6 +1123,19 @@ class GameBotGUI:
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
         threading.Thread(target=self.combat_option_logic, daemon=True).start()
+
+    def start_combat_option_8(self):
+        if not self.get_target_app_name():
+            messagebox.showwarning("警告", "请先填写目标进程名！")
+            return
+
+        self.update_target_window_size()
+        self.count = 0
+        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+        self.is_running = True
+        self.start_btn.config(state=tk.DISABLED)
+        self.stop_btn.config(state=tk.NORMAL)
+        threading.Thread(target=self.combat_option_8_logic, daemon=True).start()
 
     def start_hard_28(self):
         if not self.get_target_app_name():
