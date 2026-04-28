@@ -1,5 +1,3 @@
-import cv2
-import numpy as np
 import subprocess
 import secrets
 import time
@@ -23,38 +21,8 @@ def get_path(relative_path):
 
 
 def get_default_adb_candidates():
-    """根据系统返回可能存在的 adb 路径候选（按优先级）。"""
-    system_name = platform.system()
-    if system_name == "Darwin":
-        # macOS 下直接使用mumu模拟器内置的 adb，避免用户环境变量配置问题
-        return ["/Applications/MuMuPlayer.app/Contents/MacOS/MuMuEmulator.app/Contents/MacOS/tools/adb"]
-
-    candidates = [
-        get_path("adb"),
-        get_path("adb.exe")
-    ]
-
-    if system_name == "Windows":
-        candidates.extend([
-            r"C:\Program Files\Netease\MuMu\nx_device\12.0\shell\adb.exe",
-            "adb.exe"
-        ])
-    else:
-        candidates.extend([
-            "/usr/bin/adb",
-            "/usr/local/bin/adb",
-            os.path.expanduser("~/Android/Sdk/platform-tools/adb"),
-            "adb"
-        ])
-
-    # 保持顺序并去重
-    uniq = []
-    seen = set()
-    for p in candidates:
-        if p not in seen:
-            uniq.append(p)
-            seen.add(p)
-    return uniq
+    """macOS 下固定使用 MuMu 内置 adb。"""
+    return ["/Applications/MuMuPlayer.app/Contents/MacOS/MuMuEmulator.app/Contents/MacOS/tools/adb"]
 
 
 class GameBotGUI:
@@ -178,6 +146,8 @@ class GameBotGUI:
         self.draw_roll_btn.grid(row=0, column=4, padx=10)
         self.combat8_btn = tk.Button(self.btn_frame, text="阴阳寮突破", command=self.start_combat_option_8, bg="#607D8B", fg="black", width=15)
         self.combat8_btn.grid(row=1, column=2, padx=10, pady=8)
+        self.screenshot_btn = tk.Button(self.btn_frame, text="截图确认", command=self.save_device_screenshot, bg="#795548", fg="black", width=15)
+        self.screenshot_btn.grid(row=1, column=3, padx=10, pady=8)
         self.count = 0  # 初始轮次为 0
         self.break_roll_count = 0  # 结界突破卷计数
         self.count_label = tk.Label(root, text="已成功运行: 0 轮", font=("微软雅黑", 12, "bold"), fg="#1E90FF")
@@ -280,11 +250,39 @@ class GameBotGUI:
         return self.rng.randint(base - offset, base + offset)
 
     def get_screenshot(self):
+        import cv2
+        import numpy as np
+
         cmd = f'"{self.adb_path_entry.get()}" -s {self.device_var.get()} shell screencap -p'
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         stdout, _ = process.communicate()
         if not stdout: return None
         return cv2.imdecode(np.frombuffer(stdout.replace(b'\r\n', b'\n'), np.uint8), cv2.IMREAD_COLOR)
+
+    def save_device_screenshot(self):
+        import cv2
+
+        if not self.device_var.get():
+            messagebox.showwarning("警告", "请先选择一个设备！")
+            return
+
+        screen = self.get_screenshot()
+        if screen is None:
+            self.log("截图失败：未获取到设备画面")
+            return
+
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screenshots")
+        os.makedirs(output_dir, exist_ok=True)
+
+        device_name = re.sub(r"[^A-Za-z0-9._-]+", "_", self.device_var.get()).strip("_") or "device"
+        timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+        file_path = os.path.join(output_dir, f"{device_name}_{timestamp}.png")
+
+        if cv2.imwrite(file_path, screen):
+            self.log(f"截图已保存: {file_path}")
+            messagebox.showinfo("截图确认", f"截图已保存到:\n{file_path}")
+        else:
+            self.log("截图保存失败：cv2.imwrite 返回失败")
 
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
@@ -312,6 +310,8 @@ class GameBotGUI:
         time.sleep(0.8)
 
     def find_and_tap(self, template_path, confidence=0.5, do_tap=True):
+        import cv2
+
         # 此时 template_path 已经是 get_path 处理过的绝对路径了
         template = cv2.imread(template_path)
 
