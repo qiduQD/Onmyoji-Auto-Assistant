@@ -27,7 +27,7 @@ def get_default_adb_candidates():
     system_name = platform.system()
     if system_name == "Darwin":
         # macOS 下直接使用 PATH 中的 adb
-        return ["adb"]
+        return ["/Applications/MuMuPlayer.app/Contents/MacOS/MuMuEmulator.app/Contents/MacOS/tools/adb"]
 
     candidates = [
         get_path("adb"),
