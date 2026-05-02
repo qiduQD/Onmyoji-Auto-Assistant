@@ -31,7 +31,7 @@ def get_default_adb_candidates():
 class GameBotGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("痒痒鼠小助手 v1.2")
+        self.root.title("痒痒鼠小助手 v2.0 - 结界突破/御魂/绘卷挂机")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
             if platform.system() == "Windows":
@@ -98,6 +98,14 @@ class GameBotGUI:
             },
             "御魂十二": {
                 "start": get_path("start_button_30.png"),
+                "end": get_path("finish_mark_300.png")
+            },
+           "御灵": {
+                "start": get_path("start_button_yuling.png"),
+                "end": get_path("finish_mark_300.png")
+            },
+           "御魂组队": {
+                "start": get_path("start_button_zudui.png"),
                 "end": get_path("finish_mark_300.png")
             },
             "御魂痴": {
@@ -386,7 +394,7 @@ class GameBotGUI:
                     self.find_and_tap(template_path, confidence=confidence, do_tap=True)
                 return True
             time.sleep(interval)
-        self.log(f"等待超时: {os.path.basename(template_path)}")
+        self.log(f"未找到: {os.path.basename(template_path)}")
         return False
 
     def increment_break_roll(self):
@@ -450,13 +458,12 @@ class GameBotGUI:
             time.sleep(1.2)
 
             # 等待出现 attack 按钮并进入战斗
-            if not self.wait_for_image(get_path("attack.png"), timeout=12, confidence=conf_val, do_tap=True):
+            if not self.wait_for_image(get_path("attack.png"), timeout=4, confidence=conf_val, do_tap=True):
                 self.log("未找到 attack 按钮，跳过此位置")
                 continue
 
             # 普通8次逻辑
             if idx < 9:
-                self.wait_for_image(get_path("prepare.png"), timeout=20, confidence=conf_val, do_tap=True)
                 self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
                 time.sleep(1.2)
                 self.wait_for_image(get_path("finish_mark_300.png"), timeout=2, confidence=conf_val, do_tap=True)
@@ -477,7 +484,6 @@ class GameBotGUI:
                 self.wait_for_image(get_path("restart.png"), timeout=10, confidence=conf_val, do_tap=True)
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
-            self.wait_for_image(get_path("prepare.png"), timeout=20, confidence=conf_val, do_tap=True)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
             time.sleep(1.2)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=2, confidence=conf_val, do_tap=True)
@@ -485,7 +491,7 @@ class GameBotGUI:
 
         self.log("结界突破整体完成")
         time.sleep(1)
-        self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=conf_val, do_tap=True)
+        self.wait_for_image(get_path("cancel.png"), timeout=5, confidence=conf_val, do_tap=True)
         return True
 
     def combat_option_logic(self):
@@ -520,10 +526,11 @@ class GameBotGUI:
                 x = self.random_in_offset(base_x, 30)
                 y = self.random_in_offset(base_y, 30)
                 self.log(f"寮突模式第 {idx} 个位置继续 attack: ({x},{y})")
+                time.sleep(1)
                 self.adb_command(f"shell input tap {x} {y}")
                 time.sleep(1.2)
 
-                if not self.wait_for_image(get_path("attack.png"), timeout=12, confidence=conf_val, do_tap=True):
+                if not self.wait_for_image(get_path("attack.png"), timeout=4, confidence=conf_val, do_tap=True):
                     fail_count += 1
                     self.log(f"第 {idx} 个位置检测到 attack 失败，准备切换到下一个位置")
                     break
@@ -534,6 +541,7 @@ class GameBotGUI:
                 finish_detected = False
                 while self.is_running and time.time() - start_t < fight_timeout:
                     if self.find_and_tap(fail_img, confidence=conf_val, do_tap=False):
+                        time.sleep(0.5)
                         self.full_screen_random_tap()  # 检测到 fail 就随机点击清理一下，增加下一轮检测的成功率
                         fail_count += 1
                         self.log(f"第 {idx} 个位置失败，准备切换到下一个位置")
@@ -600,7 +608,7 @@ class GameBotGUI:
 
     def hard_28_cycle(self):
         conf_val = self.conf_slider.get()
-        self.log("开始一轮困难二十八流程：button_28 -> search -> 小戀 4 次 -> boss -> takara/search/button_28")
+        self.log("开始一轮困难二十八流程：button_28 -> search -> 小怪 5 次 -> boss -> takara/search/button_28")
 
         # 首先扫描 button_28，5s 没扫描到就跳过到 search 扫描
         button_found = self.wait_for_image(get_path("button_28.png"), timeout=5, confidence=conf_val, do_tap=True)
@@ -612,9 +620,9 @@ class GameBotGUI:
             self.log("未找到 search.png，结束本轮困难二十八流程")
             return False
 
-        # 进行4次小怪战斗
+        # 进行5次小怪战斗
         fight_count = 0
-        while self.is_running and fight_count < 4:
+        while self.is_running and fight_count < 5:
             if self.wait_for_image(get_path("attack_28.png"), timeout=4, confidence=conf_val, do_tap=True):
                 if self.process_finish_mark_300():
                     fight_count += 1
@@ -812,7 +820,8 @@ class GameBotGUI:
                 if self.find_and_tap(current_start_img, confidence=conf_val):
                     time.sleep(2)
                     # 检查是否成功进入（按钮消失则视为进入）
-                    if not self.find_and_tap(current_start_img, confidence=conf_val, do_tap=False):
+                    if not self.wait_for_image(current_start_img,timeout=2, confidence=conf_val, do_tap=False):
+                        self.log(f"成功进入【{selected_level_name}】")
                         break
                 time.sleep(2)
 
@@ -823,9 +832,8 @@ class GameBotGUI:
 
             while self.is_running:
                 # 核心修改：这里使用该关卡专属的结算图 current_end_img
-                if self.find_and_tap(current_end_img, confidence=conf_val):
+                if self.wait_for_image(current_end_img, confidence=conf_val, do_tap=True):
                     self.log(f"检测到【{selected_level_name}】专属结算图标...")
-                    self.full_screen_random_tap()
                     time.sleep(self.rng.uniform(1.0, 1.5))
                     while self.is_running:
                         # --- 修正点 1：使用变量 current_start_img 而非死代码 ---
