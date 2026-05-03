@@ -387,7 +387,7 @@ class GameBotGUI:
 
     def combat_option_cycle(self):
         # 1. 先找 break 按钮进入战斗选项入口
-        if not self.wait_for_image(get_path("break.png"), timeout=10, confidence=0.4, do_tap=True):
+        if not self.wait_for_image(get_path("break.png"), timeout=10, confidence=0.7, do_tap=True):
             self.log("未找到 break 按钮，结界突破终止。")
             return False
         time.sleep(3)
@@ -577,28 +577,35 @@ class GameBotGUI:
 
         # 进行5次小怪战斗
         fight_count = 0
+        swipe_retries = 0
         while self.is_running and fight_count < 5:
             if self.wait_for_image(get_path("attack_28.png"), timeout=3, confidence=0.7, do_tap=True):
+                swipe_retries = 0
                 if self.process_finish_mark_300(timeout=20):
                     fight_count += 1
                     self.log(f"挑战成功，完成第 {fight_count} 次小怪战斗")
                 else:
                     self.log("未检测到finish_mark_300，本次小怪不计数，继续重试")
 
-                if self.break_roll_count >= 27:
-                    self.log("结界突破卷已达到27，停止硬28循环")
+                if self.break_roll_count >= 2:
+                    self.log("结界突破卷已达到2，停止困难28循环")
                     return True
                 continue
 
-            self.log("4s 内未检测到 attack_28.png，左滑刷新")
+            # 未检测到 attack_28，进行左滑刷新；最多重试两次，仍未找到则结束小怪阶段
+            swipe_retries += 1
+            self.log(f"第 {swipe_retries} 次未检测到 attack_28，执行左滑刷新")
             self.swipe_left_full()
+            if swipe_retries >= 2:
+                self.log("连续两次刷新未找到 attack_28，结束小怪战斗流程")
+                break
 
         # boss 战
         if self.wait_for_image(get_path("boss.png"), timeout=5, confidence=0.6, do_tap=True):
             self.process_finish_mark_300(timeout=20)
             time.sleep(3)
-            if self.break_roll_count >= 27:
-                self.log("结界突破卷已达到27，停止硬28循环")
+            if self.break_roll_count >= 2:
+                self.log("结界突破卷已达2，停止困难28循环")
                 return True
 
         # takara/search/button_28 回退机制
@@ -651,28 +658,28 @@ class GameBotGUI:
             self.roll_label.config(text=f"结界突破卷: {self.break_roll_count}/30")
 
             # 先运行困难二十八直到卷数达到 27
-            while self.is_running and self.break_roll_count < 27:
+            while self.is_running and self.break_roll_count < 2:
                 result = self.hard_28_cycle()
                 if not self.is_running:
                     break
-                if not result:
-                    self.log("困难二十八本轮结束，重新开始下一轮")
-                    continue
-                if self.break_roll_count >= 27:
+                if result and self.break_roll_count >= 2:
+                    self.log("结界突破卷达标，准备进入结界突破")
                     break
 
             if not self.is_running:
                 self.log("绘卷模式被中断")
                 break
 
-            if self.break_roll_count < 27:
-                self.log("困难二十八未达到27卷，继续下一轮")
+            if self.break_roll_count < 2:
+                self.log("困难二十八未达到2卷，继续下一轮")
                 continue
 
-            self.log("结界突破卷达标(>=27)，执行返回并确认")
+            self.log("结界突破卷达标(>=2)，执行返回并确认")
             self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.4, do_tap=True)
             time.sleep(1)
             self.tap_confirm()
+            time.sleep(1)
+            self.wait_for_image(get_path("cancel.png"), timeout=3, confidence=0.4, do_tap=True)
             time.sleep(1)
 
             # 结界突破模式循环3次（3次9格=27次战斗）
@@ -685,7 +692,7 @@ class GameBotGUI:
 
             self.log("绘卷模式本轮完成，返回选择界面，准备下一轮")
 
-        self.is_running = True
+        self.is_running = False
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
 
