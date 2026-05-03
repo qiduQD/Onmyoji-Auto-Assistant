@@ -4,7 +4,7 @@ import subprocess
 import secrets
 import time
 import tkinter as tk
-from tkinter import scrolledtext, ttk
+from tkinter import scrolledtext, ttk, messagebox
 import threading
 import re
 import sys
@@ -346,6 +346,20 @@ class GameBotGUI:
     def wait_for_image(self, template_path, timeout=20, confidence=0.5, do_tap=False, interval=1.0):
         start_t = time.time()
         while self.is_running and time.time() - start_t < timeout:
+            # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png），若存在则点击并继续等待目标
+            try:
+                task_accept_img = get_path("task-accept.png")
+                # 使用较高置信度，若命中则直接点击（find_and_tap 会在命中时记录日志）
+                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
+                    time.sleep(0.6)
+                    try:
+                        # 在主线程弹出提示，避免在工作线程直接调用 tkinter
+                        self.root.after(0, lambda: messagebox.showinfo("提示", "有接取悬赏任务，记得完成！"))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
             if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
                 if do_tap:
                     time.sleep(0.5)  # 发现目标后先等 0.5 秒再点击
@@ -587,8 +601,8 @@ class GameBotGUI:
                 else:
                     self.log("未检测到finish_mark_300，本次小怪不计数，继续重试")
 
-                if self.break_roll_count >= 2:
-                    self.log("结界突破卷已达到2，停止困难28循环")
+                if self.break_roll_count >= 27:
+                    self.log("结界突破卷已达到27，停止困难28循环")
                     return True
                 continue
 
@@ -604,8 +618,8 @@ class GameBotGUI:
         if self.wait_for_image(get_path("boss.png"), timeout=5, confidence=0.6, do_tap=True):
             self.process_finish_mark_300(timeout=20)
             time.sleep(3)
-            if self.break_roll_count >= 2:
-                self.log("结界突破卷已达2，停止困难28循环")
+            if self.break_roll_count >= 27:
+                self.log("结界突破卷已达27，停止困难28循环")
                 return True
 
         # takara/search/button_28 回退机制
@@ -658,11 +672,11 @@ class GameBotGUI:
             self.roll_label.config(text=f"结界突破卷: {self.break_roll_count}/30")
 
             # 先运行困难二十八直到卷数达到 27
-            while self.is_running and self.break_roll_count < 2:
+            while self.is_running and self.break_roll_count < 27:
                 result = self.hard_28_cycle()
                 if not self.is_running:
                     break
-                if result and self.break_roll_count >= 2:
+                if result and self.break_roll_count >= 27:
                     self.log("结界突破卷达标，准备进入结界突破")
                     break
 
@@ -670,11 +684,11 @@ class GameBotGUI:
                 self.log("绘卷模式被中断")
                 break
 
-            if self.break_roll_count < 2:
-                self.log("困难二十八未达到2卷，继续下一轮")
+            if self.break_roll_count < 27:
+                self.log("困难二十八未达到27卷，继续下一轮")
                 continue
 
-            self.log("结界突破卷达标(>=2)，执行返回并确认")
+            self.log("结界突破卷达标(>=27)，执行返回并确认")
             self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.4, do_tap=True)
             time.sleep(1)
             self.tap_confirm()
