@@ -82,26 +82,26 @@ class GameBotGUI:
         self.level_map = {
             "英杰等普通耗3体副本": {
                 "start": get_path("start_button_3.png"),
-                "end": get_path("finish_mark.png")
+                "end": get_path("finish_mark_300.png")
             },
             "活动御魂300次": {
-                "start": get_path("start_button_300.png"),
+                "start": get_path("start_button.png"),
                 "end": get_path("finish_mark_300.png")
             },
             "御魂十": {
-                "start": get_path("start_button_6.png"),
+                "start": get_path("start_button.png"),
                 "end": get_path("finish_mark_300.png")
             },
             "御魂十一": {
-                "start": get_path("start_button_12.png"),
+                "start": get_path("start_button.png"),
                 "end": get_path("finish_mark_300.png")
             },
             "御魂十二": {
-                "start": get_path("start_button_30.png"),
+                "start": get_path("start_button.png"),
                 "end": get_path("finish_mark_300.png")
             },
            "御灵": {
-                "start": get_path("start_button_yuling.png"),
+                "start": get_path("start_button.png"),
                 "end": get_path("finish_mark_300.png")
             },
            "御魂组队": {
@@ -109,7 +109,7 @@ class GameBotGUI:
                 "end": get_path("finish_mark_300.png")
             },
             "御魂痴": {
-                "start": get_path("start_button_chi.png"),
+                "start": get_path("start_button.png"),
                 "end": get_path("finish_mark_300.png")
             }
         }
