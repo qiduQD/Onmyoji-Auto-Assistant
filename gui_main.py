@@ -24,8 +24,46 @@ def get_path(relative_path):
 
 
 def get_default_adb_candidates():
-    """macOS 下固定使用 MuMu 内置 adb。"""
-    return ["/Applications/MuMuPlayer.app/Contents/MacOS/MuMuEmulator.app/Contents/MacOS/tools/adb"]
+    """根据系统返回可能存在的 adb 路径候选，macOS优先使用MuMu内置adb。"""
+    system_name = platform.system()
+    candidates = []
+    
+    if system_name == "Darwin":
+        # macOS 下优先使用 MuMu 内置 adb，然后回退到 PATH 中的 adb
+        candidates.extend([
+            "/Applications/MuMuPlayer.app/Contents/MacOS/MuMuEmulator.app/Contents/MacOS/tools/adb",
+            "adb"
+        ])
+    else:
+        # 其他平台的通用逻辑
+        candidates = [
+            get_path("adb"),
+            get_path("adb.exe")
+        ]
+        
+        if system_name == "Windows":
+            candidates.extend([
+                r"C:\Program Files\Netease\MuMu\nx_device\12.0\shell\adb.exe",
+                "adb.exe"
+            ])
+        else:
+            candidates.extend([
+                "/usr/bin/adb",
+                "/usr/local/bin/adb",
+                os.path.expanduser("~/Android/Sdk/platform-tools/adb"),
+                "adb"
+            ])
+
+        # 保持顺序并去重
+        uniq = []
+        seen = set()
+        for p in candidates:
+            if p not in seen:
+                uniq.append(p)
+                seen.add(p)
+        candidates = uniq
+    
+    return candidates
 
 
 class GameBotGUI:
