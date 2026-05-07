@@ -423,17 +423,32 @@ class GameBotGUI:
         else:
             return False
 
-    def wait_for_image(self, template_path, timeout=20, confidence=0.8, do_tap=False, interval=1.0):
+    def wait_for_image(self, template_path, timeout=20, confidence=0.5, do_tap=False, interval=1.0):
         start_t = time.time()
         while self.is_running and time.time() - start_t < timeout:
+            # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png），若存在则点击并继续等待目标
+            try:
+                task_accept_img = get_path("task-accept.png")
+                # 使用较高置信度，若命中则直接点击（find_and_tap 会在命中时记录日志）
+                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
+                    time.sleep(0.6)
+                    try:
+                        # 在主线程弹出提示，避免在工作线程直接调用 tkinter
+                        self.root.after(0, lambda: messagebox.showinfo("提示", "有接取悬赏任务，记得完成！"))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
             if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
                 if do_tap:
                     time.sleep(0.5)  # 发现目标后先等 0.5 秒再点击
                     self.find_and_tap(template_path, confidence=confidence, do_tap=True)
                 return True
             time.sleep(interval)
-        self.log(f"未找到: {os.path.basename(template_path)}")
+        self.log(f"等待超时: {os.path.basename(template_path)}")
         return False
+
 
     def increment_break_roll(self):
         if self.break_roll_count < 30:
@@ -834,7 +849,7 @@ class GameBotGUI:
             if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=True):
                 time.sleep(2)
                 # 检查是否成功进入（按钮消失则视为进入）
-                if not self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
+                if not self.find_and_tap(current_start_img, confidence=conf_val, do_tap=False):
                     break
             time.sleep(2)
 
