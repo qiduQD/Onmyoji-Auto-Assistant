@@ -193,10 +193,10 @@ class GameBotGUI:
         self.hard28_btn.grid(row=0, column=3, padx=10)
         self.draw_roll_btn = tk.Button(self.btn_frame, text="绘卷模式", command=self.start_draw_roll, bg="#9C27B0", fg="black", width=15)
         self.draw_roll_btn.grid(row=0, column=4, padx=10)
+        self.draw_roll2_btn = tk.Button(self.btn_frame, text="绘卷模式2", command=self.start_draw_roll2, bg="#795548", fg="black", width=15)
+        self.draw_roll2_btn.grid(row=1, column=0, padx=10, pady=8)
         self.combat8_btn = tk.Button(self.btn_frame, text="阴阳寮突破", command=self.start_combat_option_8, bg="#607D8B", fg="black", width=15)
         self.combat8_btn.grid(row=1, column=2, padx=10, pady=8)
-        self.screenshot_btn = tk.Button(self.btn_frame, text="截图确认", command=self.save_device_screenshot, bg="#795548", fg="black", width=15)
-        self.screenshot_btn.grid(row=1, column=3, padx=10, pady=8)
         self.count = 0  # 初始轮次为 0
         self.break_roll_count = 0  # 结界突破卷计数
         self.count_label = tk.Label(root, text="已成功运行: 0 轮", font=("微软雅黑", 12, "bold"), fg="#1E90FF")
@@ -772,6 +772,178 @@ class GameBotGUI:
         self.is_running = True
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
+
+    def run_dungeon_once(self, selected_level_name, current_start_img, current_end_img, conf_val):
+        """执行一轮副本模式，成功完成后返回 True。"""
+        if not self.is_running:
+            return False
+
+        # 1. 寻找开始按钮
+        self.log(f"等待【{selected_level_name}】按钮...")
+        while self.is_running:
+            if self.wait_for_image(current_start_img, timeout=10, confidence=conf_val, do_tap=True):
+                time.sleep(2)
+                # 检查是否成功进入（按钮消失则视为进入）
+                if not self.find_and_tap(current_start_img, confidence=conf_val, do_tap=False):
+                    break
+            time.sleep(2)
+
+        if not self.is_running:
+            return False
+
+        # 2. 战斗监控
+        self.log("进入战斗监控...")
+        start_time = time.time()
+
+        while self.is_running:
+            if self.wait_for_image(current_end_img, confidence=conf_val, do_tap=True):
+                while self.is_running:
+                    if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
+                        self.count += 1
+                        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                        self.log(f"第 {self.count} 轮结束，回到主界面")
+                        return True
+                    time.sleep(1)
+
+                return False
+
+            # 超_时/挂机处理
+            if time.time() - start_time > 40:
+                # --- 修正点 2：超时检测也要用变量 ---
+                if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
+                    self.count += 1
+                    self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                    return True
+
+                self.full_screen_random_tap()
+                # 每次乱点后重置一点时间，避免疯狂点击
+                start_time = time.time() - 15
+
+            time.sleep(1)
+
+        return False
+    
+    def run_dungeon_random(self, selected_level_name, current_start_img, current_end_img, conf_val):
+        """执行绘卷副本模式，成功完成后返回 True。"""
+        if not self.is_running:
+            return False
+
+        # 1. 寻找开始按钮
+        self.log(f"等待【{selected_level_name}】按钮...")
+        while self.is_running:
+            if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=True):
+                time.sleep(2)
+                # 检查是否成功进入（按钮消失则视为进入）
+                if not self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
+                    break
+            time.sleep(2)
+
+        if not self.is_running:
+            return False
+
+        # 2. 战斗监控
+        self.log("进入战斗监控...")
+        start_time = time.time()
+
+        while self.is_running:
+            if self.process_finish_mark_300():
+                while self.is_running:
+                    if self.wait_for_image(current_start_img, timeout=10, confidence=conf_val, do_tap=False):
+                        self.count += 1
+                        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                        self.log(f"第 {self.count} 轮结束，回到主界面")
+                        return True
+                    time.sleep(1)
+
+                return False
+
+            # 超_时/挂机处理
+            if time.time() - start_time > 40:
+                # --- 修正点 2：超时检测也要用变量 ---
+                if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
+                    self.count += 1
+                    self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                    return True
+
+                self.full_screen_random_tap()
+                # 每次乱点后重置一点时间，避免疯狂点击
+                start_time = time.time() - 15
+
+            time.sleep(1)
+
+        return False
+
+    def draw_roll2_logic(self):
+        self.log("开始绘卷模式2循环：副本模式 -> 9卷切结界突破 -> 返回副本 -> 重复")
+
+        conf_val = self.conf_slider.get()
+        selected_level_name = self.level_var.get()
+        level_cfg = self.level_map.get(selected_level_name)
+        if not level_cfg:
+            self.log("未找到当前关卡配置，绘卷模式2终止")
+            self.is_running = False
+            self.start_btn.config(state=tk.NORMAL)
+            self.stop_btn.config(state=tk.DISABLED)
+            return
+
+        current_start_img = level_cfg["start"]
+        current_end_img = level_cfg["end"]
+        self.log(f"绘卷模式2当前副本：{selected_level_name}")
+
+        while self.is_running:
+            self.break_roll_count = 0
+            self.roll_label.config(text=f"结界突破卷: {self.break_roll_count}/30")
+
+            while self.is_running and self.break_roll_count < 9:
+                if not self.run_dungeon_random(selected_level_name, current_start_img, current_end_img, conf_val):
+                    break
+
+                if self.break_roll_count >= 9:
+                    break
+
+            if not self.is_running:
+                break
+
+            if self.break_roll_count < 9:
+                self.log("绘卷模式2未达到9张结界突破卷，继续副本循环")
+                continue
+
+            self.log("绘卷模式2卷数达标(>=9)，点击 back_button 进入结界突破")
+            self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.4, do_tap=True)
+            time.sleep(1)
+
+
+            self.log("绘卷模式2：执行结界突破模式")
+            self.combat_option_cycle()
+            time.sleep(1)
+
+            self.log("绘卷模式2：结界突破结束，点击 button_task 返回副本界面")
+            self.wait_for_image(get_path("button_task.png"), timeout=10, confidence=0.4, do_tap=True)
+            self.wait_for_image(get_path("confirm_boss.png"), timeout=10, confidence=0.4, do_tap=True)
+            time.sleep(1)
+
+        self.log("绘卷模式2流程结束")
+        self.is_running = False
+        self.start_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+
+    def start_draw_roll2(self):
+        """绘卷模式2按钮处理器"""
+        if self.is_running:
+            self.log("自动运行已在进行中")
+            return
+
+        device = self.device_var.get()
+        if not device:
+            self.log("未选择设备，请先连接设备")
+            return
+
+        self.is_running = True
+        self.start_btn.config(state=tk.DISABLED)
+        self.stop_btn.config(state=tk.NORMAL)
+        self.log("启动绘卷模式2")
+
+        threading.Thread(target=self.draw_roll2_logic, daemon=True).start()
 
     def start_combat_option(self):
         if not self.device_var.get():
