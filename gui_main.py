@@ -26,7 +26,6 @@ def get_default_adb_candidates():
     """根据系统返回可能存在的 adb 路径候选（按优先级）。"""
     system_name = platform.system()
     if system_name == "Darwin":
-        # macOS 下直接使用 PATH 中的 adb
         return ["adb"]
 
     candidates = [
@@ -752,7 +751,7 @@ class GameBotGUI:
                 return False
 
             # 超_时/挂机处理
-            if time.time() - start_time > 120:
+            if time.time() - start_time > 130:
                 # --- 修正点 2：超时检测也要用变量 ---
                 if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
                     self.count += 1
@@ -802,7 +801,7 @@ class GameBotGUI:
                 return False
 
             # 超_时/挂机处理
-            if time.time() - start_time > 120:
+            if time.time() - start_time > 130:
                 # --- 修正点 2：超时检测也要用变量 ---
                 if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
                     self.count += 1
