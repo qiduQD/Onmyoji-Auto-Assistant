@@ -25,17 +25,27 @@ def get_path(relative_path):
 def get_default_adb_candidates():
     """根据系统返回可能存在的 adb 路径候选（按优先级）。"""
     system_name = platform.system()
-    if system_name == "Darwin":
-        return ["adb"]
+    # 先构造空列表，再按系统添加候选项（保证 extend 不会出错）
+    candidates = []
 
-    candidates = [
+    if system_name == "Darwin":
+        # macOS 下优先使用 MuMu 内置 adb，然后回退到 PATH 中的 adb
+        candidates.extend([
+            "/Applications/MuMuPlayer.app/Contents/MacOS/MuMuEmulator.app/Contents/MacOS/tools/adb",
+            "adb"
+        ])
+
+    # 通用：项目自带的 adb 可执行文件（打包时会放入 assets）
+    candidates.extend([
         get_path("adb"),
         get_path("adb.exe")
-    ]
+    ])
 
     if system_name == "Windows":
+        # 优先尝试 MuMu 的 adb（常见于 C: 与 D:），然后回退到 PATH 中的 adb.exe
         candidates.extend([
             r"C:\Program Files\Netease\MuMu\nx_device\12.0\shell\adb.exe",
+            r"D:\Program Files\Netease\MuMu\nx_device\12.0\shell\adb.exe",
             "adb.exe"
         ])
     else:
@@ -222,10 +232,38 @@ class GameBotGUI:
     def refresh_devices(self):
         """获取当前所有连接的 ADB 设备"""
         try:
-            adb = self.adb_path_entry.get()
+            adb = self.adb_path_entry.get().strip()
+
+            # 优先使用当前输入框中的 adb 路径/命令
             result = subprocess.run(f'"{adb}" devices', shell=True, capture_output=True, text=True)
             lines = result.stdout.strip().split('\n')[1:]
-            self.devices = [line.split('\t')[0] for line in lines if line.strip()]
+            devices = [line.split('\t')[0] for line in lines if line.strip()]
+
+            # 若当前 adb 未检测到设备，则尝试候选路径并自动切换到可以工作的 adb
+            if not devices:
+                candidates = get_default_adb_candidates()
+                for cand in candidates:
+                    if not cand or cand == adb:
+                        continue
+                    try:
+                        res = subprocess.run(f'"{cand}" devices', shell=True, capture_output=True, text=True)
+                        lines2 = res.stdout.strip().split('\n')[1:]
+                        devices2 = [line.split('\t')[0] for line in lines2 if line.strip()]
+                        if devices2:
+                            adb = cand
+                            # 更新输入框以反映切换的 adb
+                            try:
+                                self.adb_path_entry.delete(0, tk.END)
+                                self.adb_path_entry.insert(0, adb)
+                            except Exception:
+                                pass
+                            self.log(f"未检测到设备，已切换 ADB 到: {adb}")
+                            devices = devices2
+                            break
+                    except Exception:
+                        continue
+
+            self.devices = devices
 
             if self.devices:
                 self.device_menu['values'] = self.devices
