@@ -347,7 +347,7 @@ class GameBotGUI:
             return True
         return False
 
-    def wait_for_image(self, template_path, timeout=20, confidence=0.5, do_tap=False, interval=1.0):
+    def wait_for_image(self, template_path, timeout=60, confidence=0.5, do_tap=False, interval=1.0):
         start_t = time.time()
         while self.is_running and time.time() - start_t < timeout:
             # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png），若存在则点击并继续等待目标
@@ -380,7 +380,7 @@ class GameBotGUI:
         else:
             self.log("结界突破卷已达30上线，不再计数")
 
-    def process_finish_mark_300(self, timeout=50):
+    def process_finish_mark_300(self, timeout=60):
         conf_val = self.conf_slider.get()
         mark = get_path("finish_mark_300.png")
 
@@ -463,7 +463,7 @@ class GameBotGUI:
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
             
-            self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
+            self.wait_for_image(get_path("finish_mark_300.png"), timeout=120, confidence=conf_val, do_tap=True)
             time.sleep(2)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
             self.log("第九次位置战斗结束，结界突破完成")
@@ -740,7 +740,7 @@ class GameBotGUI:
         start_time = time.time()
 
         while self.is_running:
-            if self.wait_for_image(current_end_img, confidence=conf_val, do_tap=True):
+            if self.wait_for_image(current_end_img, timeout=120, confidence=conf_val, do_tap=True):
                 while self.is_running:
                     if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
                         self.count += 1
@@ -752,7 +752,7 @@ class GameBotGUI:
                 return False
 
             # 超_时/挂机处理
-            if time.time() - start_time > 40:
+            if time.time() - start_time > 120:
                 # --- 修正点 2：超时检测也要用变量 ---
                 if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
                     self.count += 1
@@ -802,7 +802,7 @@ class GameBotGUI:
                 return False
 
             # 超_时/挂机处理
-            if time.time() - start_time > 40:
+            if time.time() - start_time > 120:
                 # --- 修正点 2：超时检测也要用变量 ---
                 if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
                     self.count += 1
