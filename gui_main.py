@@ -69,7 +69,7 @@ def get_default_adb_candidates():
 class GameBotGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("痒痒鼠小助手 v2.1 - 已适配阴阳师新UI")
+        self.root.title("痒痒鼠小助手 v2.2 - 已适配阴阳师新UI,加入斗技挂机功能")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
             if platform.system() == "Windows":
@@ -96,6 +96,9 @@ class GameBotGUI:
         self.rng = secrets.SystemRandom()
         self.screen_w = 1600  # 默认值
         self.screen_h = 900  # 默认值
+        self.task_start_time = None
+        self.total_time_limit_seconds = 0
+        self.time_limit_hit = False
 
         # --- UI 布局 ---
         # 1. ADB 路径
@@ -197,6 +200,10 @@ class GameBotGUI:
         self.draw_roll2_btn.grid(row=1, column=0, padx=10, pady=8)
         self.combat8_btn = tk.Button(self.btn_frame, text="阴阳寮突破", command=self.start_combat_option_8, bg="#607D8B", fg="black", width=15)
         self.combat8_btn.grid(row=1, column=2, padx=10, pady=8)
+        self.arena_btn = tk.Button(self.btn_frame, text="斗技", command=self.start_arena, bg="#E91E63", fg="black", width=15)
+        self.arena_btn.grid(row=1, column=1, padx=10, pady=8)
+        self.screenshot_btn = tk.Button(self.btn_frame, text="截图确认", command=self.screenshot_confirm, bg="#00BCD4", fg="black", width=15)
+        self.screenshot_btn.grid(row=1, column=4, padx=10, pady=8)
         self.count = 0  # 初始轮次为 0
         self.break_roll_count = 0  # 结界突破卷计数
         self.count_label = tk.Label(root, text="已成功运行: 0 轮", font=("微软雅黑", 12, "bold"), fg="#1E90FF")
@@ -210,6 +217,16 @@ class GameBotGUI:
         self.limit_entry = tk.Entry(limit_frame, textvariable=self.limit_var, width=10)
         self.limit_entry.insert(0, "0")  # 默认 0 轮
         self.limit_entry.grid(row=0, column=1, padx=5)
+
+        time_frame = tk.Frame(root)
+        time_frame.pack(pady=5)
+        tk.Label(time_frame, text="总时长(分钟，0表示无限):").grid(row=0, column=0)
+
+        self.time_limit_var = tk.StringVar()
+        self.time_limit_entry = tk.Entry(time_frame, textvariable=self.time_limit_var, width=10)
+        self.time_limit_entry.insert(0, "0")
+        self.time_limit_entry.grid(row=0, column=1, padx=5)
+
         self.count_label.pack(pady=5)
         self.roll_label.pack(pady=2)
 
@@ -228,6 +245,35 @@ class GameBotGUI:
         now = time.strftime("%H:%M:%S", time.localtime())
         self.log_area.insert(tk.END, f"[{now}] {message}\n")
         self.log_area.see(tk.END)
+
+    def start_total_time_control(self):
+        self.task_start_time = time.time()
+        try:
+            total_minutes = float(self.time_limit_var.get())
+        except ValueError:
+            total_minutes = 0
+            self.log("总时长格式错误，已默认为无限模式")
+
+        self.total_time_limit_seconds = max(0, int(total_minutes * 60))
+        self.time_limit_hit = False
+
+    def check_total_time_limit(self):
+        if not self.is_running:
+            return False
+        if self.total_time_limit_seconds <= 0 or self.task_start_time is None:
+            return False
+
+        elapsed = time.time() - self.task_start_time
+        if elapsed < self.total_time_limit_seconds:
+            return False
+
+        if not self.time_limit_hit:
+            self.time_limit_hit = True
+            self.log("已达到总时长，脚本自动停止。")
+        self.is_running = False
+        self.start_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+        return True
 
     def refresh_devices(self):
         """获取当前所有连接的 ADB 设备"""
@@ -336,7 +382,7 @@ class GameBotGUI:
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
         tx = self.rng.randint(int(self.screen_w * 0.3), int(self.screen_w * 0.7))
-        ty = self.rng.randint(40, 460)
+        ty = self.rng.randint(80, 460)
         self.log(f" -> [清理中] 随机点击: ({tx}, {ty})")
         self.adb_command(f"shell input tap {tx} {ty}")
 
@@ -387,6 +433,9 @@ class GameBotGUI:
     def wait_for_image(self, template_path, timeout=60, confidence=0.5, do_tap=False, interval=1.0):
         start_t = time.time()
         while self.is_running and time.time() - start_t < timeout:
+            if self.check_total_time_limit():
+                return False
+
             # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png），若存在则点击并继续等待目标
             try:
                 task_accept_img = get_path("task-accept.png")
@@ -512,6 +561,8 @@ class GameBotGUI:
 
     def combat_option_logic(self):
         for i in range(3):
+                if self.check_total_time_limit():
+                    break
                 if not self.is_running:
                     break
                 self.log(f"第 {i+1} 次结界突破循环")
@@ -600,6 +651,8 @@ class GameBotGUI:
 
         round_count = 0
         while self.is_running:
+            if self.check_total_time_limit():
+                break
             if target_limit > 0 and round_count >= target_limit:
                 self.log(f"阴阳寮突破已达到目标轮数 {target_limit}，自动停止")
                 break
@@ -689,6 +742,8 @@ class GameBotGUI:
 
     def hard_28_logic(self):
         while self.is_running:
+            if self.check_total_time_limit():
+                break
             if not self.hard_28_cycle():
                 break
 
@@ -703,6 +758,7 @@ class GameBotGUI:
             return
 
         self.update_screen_size()
+        self.start_total_time_control()
         self.is_running = True
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
@@ -712,6 +768,8 @@ class GameBotGUI:
         self.log("开始绘卷模式循环")
 
         while self.is_running:
+            if self.check_total_time_limit():
+                break
             self.break_roll_count = 0
             self.roll_label.config(text=f"结界突破卷: {self.break_roll_count}/30")
 
@@ -777,8 +835,12 @@ class GameBotGUI:
         start_time = time.time()
 
         while self.is_running:
+            if self.check_total_time_limit():
+                return False
             if self.wait_for_image(current_end_img, timeout=120, confidence=conf_val, do_tap=True):
                 while self.is_running:
+                    if self.check_total_time_limit():
+                        return False
                     if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
                         self.count += 1
                         self.count_label.config(text=f"已成功运行: {self.count} 轮")
@@ -827,8 +889,12 @@ class GameBotGUI:
         start_time = time.time()
 
         while self.is_running:
+            if self.check_total_time_limit():
+                return False
             if self.process_finish_mark_300():
                 while self.is_running:
+                    if self.check_total_time_limit():
+                        return False
                     if self.wait_for_image(current_start_img, timeout=10, confidence=conf_val, do_tap=False):
                         self.count += 1
                         self.count_label.config(text=f"已成功运行: {self.count} 轮")
@@ -872,6 +938,8 @@ class GameBotGUI:
         self.log(f"绘卷模式2当前副本：{selected_level_name}")
 
         while self.is_running:
+            if self.check_total_time_limit():
+                break
             self.break_roll_count = 0
             self.roll_label.config(text=f"结界突破卷: {self.break_roll_count}/30")
 
@@ -914,6 +982,7 @@ class GameBotGUI:
             return
 
         self.update_screen_size()
+        self.start_total_time_control()
         self.is_running = True
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
@@ -925,6 +994,7 @@ class GameBotGUI:
             return
 
         self.update_screen_size()
+        self.start_total_time_control()
         self.is_running = True
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
@@ -937,6 +1007,7 @@ class GameBotGUI:
 
         self.update_screen_size()
         self.count = 0
+        self.start_total_time_control()
         self.count_label.config(text=f"已成功运行: {self.count} 轮")
         self.is_running = True
         self.start_btn.config(state=tk.DISABLED)
@@ -949,10 +1020,110 @@ class GameBotGUI:
             return
 
         self.update_screen_size()
+        self.start_total_time_control()
         self.is_running = True
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
         threading.Thread(target=self.hard_28_logic, daemon=True).start()
+
+    def arena_cycle(self):
+        """执行一轮斗技流程：点击 battle_start -> 等待 auto -> 点击 auto_on -> 等待 finish -> 随机点击清理并返回 True"""
+        conf_val = self.conf_slider.get()
+
+        # 1. 点击 battle_start
+        if not self.wait_for_image(get_path("battle_start.png"), timeout=10, confidence=conf_val, do_tap=True):
+            self.log("未找到 battle_start.png，斗技终止。")
+            return False
+        time.sleep(1)
+
+        # 2. 等待 auto 图标出现（进入战斗前的自动战斗按钮界面）
+        if not self.wait_for_image(get_path("auto.png"), timeout=10, confidence=0.6, do_tap=True):
+            self.log("未检测到 auto.png，斗技进入战斗失败")
+            return False
+        time.sleep(1)
+
+        # 3. 不再自动点击 auto_on，改为进入战斗后轮询检测
+        # 4. 轮询等待 finish 标记：每次检测 finish 之前先扫描 texie.png（若存在则先随机清理一次）
+        finish_img = get_path("finish_douji.png")
+        texie_img = get_path("texie.png")
+        start_t = time.time()
+        while self.is_running:
+            if self.check_total_time_limit():
+                return False
+
+            # 若出现 texie（特异提示），先进行一次随机清理点击再继续检测 finish
+            try:
+                if self.find_and_tap(texie_img, confidence=conf_val, do_tap=False):
+                    self.log("检测到 texie.png，执行随机点击清理")
+                    self.full_screen_random_tap()
+                    time.sleep(0.6)
+            except Exception:
+                pass
+
+            if self.find_and_tap(finish_img, confidence=conf_val, do_tap=False):
+                # 发现结算，点击并清理
+                self.find_and_tap(finish_img, confidence=conf_val, do_tap=True)
+                time.sleep(1)
+                self.full_screen_random_tap()
+                self.count += 1
+                self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                self.log(f"斗技第 {self.count} 轮结束")
+                return True
+
+            # 超时保护：长时间无响应则随机点一次尝试恢复
+            if time.time() - start_t > 1800:  # 30分钟未检测到 finish 或 texie，执行随机点击尝试恢复
+                self.log("斗技战斗超时，执行随机点击尝试恢复")
+                self.full_screen_random_tap()
+                start_t = time.time()
+
+            time.sleep(1)
+
+        return False
+
+    def arena_logic(self):
+        try:
+            target_limit = int(self.limit_var.get())
+        except ValueError:
+            target_limit = 0
+            self.log("目标轮数格式错误，斗技已默认为无限模式")
+
+        round_count = 0
+        while self.is_running:
+            if self.check_total_time_limit():
+                break
+            if target_limit > 0 and round_count >= target_limit:
+                self.log(f"斗技已达到目标轮数 {target_limit}，自动停止")
+                break
+
+            self.log(f"斗技第 {round_count + 1} 轮开始")
+            if self.arena_cycle():
+                round_count += 1
+                self.count = round_count
+                self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                self.log(f"斗技第 {round_count} 轮结束")
+            else:
+                self.log("斗技本轮未完成，准备重试")
+
+            time.sleep(1)
+
+        self.log("斗技流程结束")
+        self.is_running = False
+        self.start_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+
+    def start_arena(self):
+        if not self.device_var.get():
+            messagebox.showwarning("警告", "请先选择一个设备！")
+            return
+
+        self.update_screen_size()
+        self.count = 0
+        self.start_total_time_control()
+        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+        self.is_running = True
+        self.start_btn.config(state=tk.DISABLED)
+        self.stop_btn.config(state=tk.NORMAL)
+        threading.Thread(target=self.arena_logic, daemon=True).start()
 
     # ================= 线程运行控制 =================
     def start_task(self):
@@ -960,6 +1131,7 @@ class GameBotGUI:
             messagebox.showwarning("警告", "请先选择一个设备！")
             return
         self.update_screen_size()
+        self.start_total_time_control()
         self.is_running = True
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
@@ -969,6 +1141,50 @@ class GameBotGUI:
         self.is_running = False
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
+
+    def screenshot_confirm(self):
+        """获取模拟器截图并保存到本地"""
+        if not self.device_var.get():
+            messagebox.showwarning("警告", "请先选择一个设备！")
+            return
+        
+        threading.Thread(target=self._do_screenshot_confirm, daemon=True).start()
+
+    def _do_screenshot_confirm(self):
+        """在线程中执行截图操作并保存"""
+        try:
+            self.log("正在获取模拟器截图...")
+            
+            # 获取截图
+            screenshot = self.get_screenshot()
+            if screenshot is None:
+                self.log("错误：无法获取截图，请检查设备连接")
+                messagebox.showerror("错误", "无法获取截图，请检查设备连接")
+                return
+            
+            # 创建 screenshots 文件夹
+            screenshot_dir = os.path.join(os.path.dirname(__file__), "screenshots")
+            os.makedirs(screenshot_dir, exist_ok=True)
+            
+            # 生成带时间戳的文件名
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            filename = f"screenshot_{timestamp}.png"
+            filepath = os.path.join(screenshot_dir, filename)
+            
+            # 保存截图
+            cv2.imwrite(filepath, screenshot)
+            
+            if os.path.exists(filepath):
+                file_size = os.path.getsize(filepath) / 1024  # 转换为 KB
+                self.log(f"✓ 截图已保存: {filename} ({file_size:.1f}KB)")
+                messagebox.showinfo("成功", f"截图已保存到:\nscreenshots\\{filename}")
+            else:
+                self.log("错误：保存截图失败")
+                messagebox.showerror("错误", "保存截图失败")
+                
+        except Exception as e:
+            self.log(f"截图出错: {e}")
+            messagebox.showerror("错误", f"截图出错: {e}")
 
     def run_logic(self):
         self.log("=== 脚本开始运行 ===")
@@ -991,6 +1207,8 @@ class GameBotGUI:
         self.log(f"当前模式：{selected_level_name}")
 
         while self.is_running:
+            if self.check_total_time_limit():
+                break
             # --- 新增：检查是否达到目标轮数 ---
             if target_limit > 0 and self.count >= target_limit:
                 self.log(f"已达到目标轮数 {target_limit}，脚本自动停止。")
