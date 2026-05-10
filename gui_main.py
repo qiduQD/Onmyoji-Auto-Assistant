@@ -382,7 +382,7 @@ class GameBotGUI:
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
         tx = self.rng.randint(int(self.screen_w * 0.3), int(self.screen_w * 0.7))
-        ty = self.rng.randint(80, 460)
+        ty = self.rng.randint(750, 850)
         self.log(f" -> [清理中] 随机点击: ({tx}, {ty})")
         self.adb_command(f"shell input tap {tx} {ty}")
 
@@ -452,8 +452,10 @@ class GameBotGUI:
 
             if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
                 if do_tap:
-                    time.sleep(0.5)  # 发现目标后先等 0.5 秒再点击
-                    self.find_and_tap(template_path, confidence=confidence, do_tap=True)
+                    time.sleep(0.3)  # 发现目标后先等 0.3 秒再点击
+                    if not self.find_and_tap(template_path, confidence=confidence, do_tap=True):
+                        self.log(f"警告：目标 {os.path.basename(template_path)} 在点击时未找到，可能是界面变化")
+                        self.full_screen_random_tap()  # 随机点击清理一下，增加下一轮检测的成功率
                 return True
             time.sleep(interval)
         self.log(f"等待超时: {os.path.basename(template_path)}")
@@ -837,7 +839,7 @@ class GameBotGUI:
         while self.is_running:
             if self.check_total_time_limit():
                 return False
-            if self.wait_for_image(current_end_img, timeout=120, confidence=conf_val, do_tap=True):
+            if self.wait_for_image(current_end_img, timeout=90, confidence=conf_val, do_tap=True):
                 while self.is_running:
                     if self.check_total_time_limit():
                         return False
@@ -851,16 +853,19 @@ class GameBotGUI:
                 return False
 
             # 超_时/挂机处理
-            if time.time() - start_time > 130:
+            if time.time() - start_time > 100:
                 # --- 修正点 2：超时检测也要用变量 ---
-                if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
+
+                if self.find_and_tap(current_start_img, confidence=conf_val, do_tap=False):
                     self.count += 1
                     self.count_label.config(text=f"已成功运行: {self.count} 轮")
-                    return True
+                    break
 
                 self.full_screen_random_tap()
                 # 每次乱点后重置一点时间，避免疯狂点击
-                start_time = time.time() - 15
+                start_time = time.time() - 5
+
+                
 
             time.sleep(1)
 
@@ -905,16 +910,16 @@ class GameBotGUI:
                 return False
 
             # 超_时/挂机处理
-            if time.time() - start_time > 130:
+            if time.time() - start_time > 100:
                 # --- 修正点 2：超时检测也要用变量 ---
-                if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
+                if self.find_and_tap(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
                     self.count += 1
                     self.count_label.config(text=f"已成功运行: {self.count} 轮")
                     return True
 
                 self.full_screen_random_tap()
                 # 每次乱点后重置一点时间，避免疯狂点击
-                start_time = time.time() - 15
+                start_time = time.time() - 5
 
             time.sleep(1)
 
