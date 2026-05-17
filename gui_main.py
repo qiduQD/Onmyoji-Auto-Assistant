@@ -69,7 +69,7 @@ def get_default_adb_candidates():
 class GameBotGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("痒痒鼠小助手 v2.2 - 已适配阴阳师新UI,加入斗技挂机功能")
+        self.root.title("痒痒鼠小助手 v2.3 - 已适配阴阳师新UI,多开组队，挂机斗技优化")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
             if platform.system() == "Windows":
@@ -145,10 +145,6 @@ class GameBotGUI:
                 "start": get_path("start_button.png"),
                 "end": get_path("finish_mark_300.png")
             },
-            "组队": {
-                "start": get_path("start_button_zudui.png"),
-                "end": get_path("finish_mark_300.png")
-            },
             "御魂痴": {
                 "start": get_path("start_button.png"),
                 "end": get_path("finish_mark_300.png")
@@ -163,6 +159,8 @@ class GameBotGUI:
         self.device_menu = ttk.Combobox(device_frame, textvariable=self.device_var, width=25, state="readonly")
         self.device_menu.grid(row=0, column=1, padx=5)
         tk.Button(device_frame, text="刷新设备列表", command=self.refresh_devices).grid(row=0, column=2)
+        self.screenshot_btn = tk.Button(device_frame, text="截图确认", command=self.screenshot_confirm, bg="#CFD8D9", fg="black", width=15)
+        self.screenshot_btn.grid(row=0, column=3, padx=10, pady=8)
 
         #关卡选择区
         level_frame = tk.Frame(root)
@@ -202,8 +200,11 @@ class GameBotGUI:
         self.combat8_btn.grid(row=1, column=2, padx=10, pady=8)
         self.arena_btn = tk.Button(self.btn_frame, text="斗技", command=self.start_arena, bg="#E91E63", fg="black", width=15)
         self.arena_btn.grid(row=1, column=1, padx=10, pady=8)
-        self.screenshot_btn = tk.Button(self.btn_frame, text="截图确认", command=self.screenshot_confirm, bg="#00BCD4", fg="black", width=15)
-        self.screenshot_btn.grid(row=1, column=4, padx=10, pady=8)
+        self.zudui_btn = tk.Button(self.btn_frame, text="组队", command=self.start_zudui, bg="#7D5A5A", fg="black", width=15)
+        self.zudui_btn.grid(row=1, column=3, padx=10, pady=8)
+        self.bezudui_btn = tk.Button(self.btn_frame, text="被组队", command=self.start_bezudui, bg="#9E9E9E", fg="black", width=15)
+        self.bezudui_btn.grid(row=1, column=4, padx=10, pady=8)
+        
         self.count = 0  # 初始轮次为 0
         self.break_roll_count = 0  # 结界突破卷计数
         self.count_label = tk.Label(root, text="已成功运行: 0 轮", font=("微软雅黑", 12, "bold"), fg="#1E90FF")
@@ -381,7 +382,7 @@ class GameBotGUI:
 
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
-        tx = self.rng.randint(int(self.screen_w * 0.3), int(self.screen_w * 0.7))
+        tx = self.rng.randint(550, 1350)
         ty = self.rng.randint(750, 850)
         self.log(f" -> [清理中] 随机点击: ({tx}, {ty})")
         self.adb_command(f"shell input tap {tx} {ty}")
@@ -452,7 +453,7 @@ class GameBotGUI:
 
             if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
                 if do_tap:
-                    time.sleep(0.3)  # 发现目标后先等 0.3 秒再点击
+                    time.sleep(0.5)  # 发现目标后先等 0.5 秒再点击
                     if not self.find_and_tap(template_path, confidence=confidence, do_tap=True):
                         self.log(f"警告：目标 {os.path.basename(template_path)} 在点击时未找到，可能是界面变化")
                         self.full_screen_random_tap()  # 随机点击清理一下，增加下一轮检测的成功率
@@ -532,7 +533,7 @@ class GameBotGUI:
                 
                 self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
                 time.sleep(2)
-                self.wait_for_image(get_path("finish_mark_300.png"), timeout=2, confidence=conf_val, do_tap=True)
+                self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
                 self.log(f"第 {idx} 次位置战斗结束，继续下一个位置")
                 time.sleep(2)
                 continue
@@ -607,7 +608,7 @@ class GameBotGUI:
                 start_t = time.time()
                 finish_detected = False
                 while self.is_running and time.time() - start_t < fight_timeout:
-                    if self.find_and_tap(fail_img, confidence=0.5, do_tap=False):
+                    if self.find_and_tap(fail_img, confidence=0.7, do_tap=False):
                         time.sleep(0.5)
                         self.full_screen_random_tap()  # 检测到 fail 就随机点击清理一下，增加下一轮检测的成功率
                         fail_count += 1
@@ -615,9 +616,9 @@ class GameBotGUI:
                         time.sleep(2)
                         break
 
-                    if self.find_and_tap(finish_img, confidence=0.5, do_tap=False):
+                    if self.find_and_tap(finish_img, confidence=0.7, do_tap=False):
                         time.sleep(0.5)
-                        self.find_and_tap(finish_img, confidence=0.5, do_tap=True)
+                        self.find_and_tap(finish_img, confidence=0.7, do_tap=True)
                         finish_detected = True
                         time.sleep(1.4)
                         break
@@ -793,11 +794,11 @@ class GameBotGUI:
                 continue
 
             self.log("结界突破卷达标(>=27)，执行返回并确认")
-            self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.4, do_tap=True)
+            self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.7, do_tap=True)
             time.sleep(1)
             self.tap_confirm()
             time.sleep(1)
-            self.wait_for_image(get_path("cancel.png"), timeout=3, confidence=0.4, do_tap=True)
+            self.wait_for_image(get_path("back_button.png"), timeout=3, confidence=0.7, do_tap=True)
             time.sleep(1)
 
             # 结界突破模式循环3次（3次9格=27次战斗）
@@ -848,25 +849,112 @@ class GameBotGUI:
                         self.count_label.config(text=f"已成功运行: {self.count} 轮")
                         self.log(f"第 {self.count} 轮结束，回到主界面")
                         return True
+                    else:
+                        self.log("未检测到开始按钮，继续等待...")
+                        self.full_screen_random_tap()  # 可能卡在结算界面，随机点击清理一下
                     time.sleep(1)
 
                 return False
 
             # 超_时/挂机处理
-            if time.time() - start_time > 100:
-                # --- 修正点 2：超时检测也要用变量 ---
-
-                if self.find_and_tap(current_start_img, confidence=conf_val, do_tap=False):
-                    self.count += 1
-                    self.count_label.config(text=f"已成功运行: {self.count} 轮")
-                    break
-
-                self.full_screen_random_tap()
-                # 每次乱点后重置一点时间，避免疯狂点击
-                start_time = time.time() - 5
+            if time.time() - start_time > 90:
+                while self.is_running:
+                    if self.check_total_time_limit():
+                        return False
+                    if self.find_and_tap(current_start_img, confidence=conf_val, do_tap=False):
+                        self.count += 1
+                        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                        self.log(f"第 {self.count} 轮超时检测到开始按钮，视为完成")
+                        return True
+                    else:
+                        self.log("超时检测未找到开始按钮，执行随机点击清理")
+                        self.full_screen_random_tap()
+                        time.sleep(1)  # 每次乱点后重置一点时间，避免疯狂点击
 
                 
+            time.sleep(1)
 
+        return False
+    
+    def run_dungeon_zudui(self, conf_val):
+        """执行一轮组队副本模式，成功完成后返回 True。"""
+        if not self.is_running:
+            return False
+
+        # 1. 寻找开始按钮
+        self.log(f"等待组队挑战按钮...")
+        while self.is_running:
+            if self.wait_for_image(get_path("start_button_zudui.png"), timeout=10, confidence=conf_val, do_tap=True):
+                time.sleep(2)
+                # 检查是否成功进入（按钮消失则视为进入）
+                if not self.find_and_tap(get_path("start_button_zudui.png"), confidence=conf_val, do_tap=False):
+                    break
+            time.sleep(2)
+
+        if not self.is_running:
+            return False
+
+        # 2. 战斗监控
+        self.log("进入战斗监控...")
+        start_time = time.time()
+
+        while self.is_running:
+            if self.check_total_time_limit():
+                return False
+            finish_imgs = [get_path("finish_mark.png"), get_path("finish_mark_sp.png")]
+            finish_detected = False
+            matched_finish_img = None
+            finish_start_t = time.time()
+            while self.is_running and time.time() - finish_start_t < 90:
+                if self.check_total_time_limit():
+                    return False
+
+                for finish_img in finish_imgs:
+                    if self.find_and_tap(finish_img, confidence=conf_val, do_tap=False):
+                        matched_finish_img = finish_img
+                        finish_detected = True
+                        break
+
+                if finish_detected:
+                    time.sleep(0.5)
+                    self.find_and_tap(matched_finish_img, confidence=conf_val, do_tap=True)
+                    break
+
+                time.sleep(1)
+
+            if finish_detected:
+                self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
+                while self.is_running:
+                    if self.check_total_time_limit():
+                        return False
+                    if self.wait_for_image(get_path("start_button_zudui.png"), timeout=3, confidence=conf_val, do_tap=False):
+                        self.count += 1
+                        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                        self.log(f"第 {self.count} 轮结束，回到主界面")
+                        return True
+                    else:
+                        self.log("未检测到开始按钮，继续等待...")
+                        self.full_screen_random_tap()  # 可能卡在结算界面，随机点击清理一下
+                    time.sleep(1)
+
+                return False
+
+            # 超_时/挂机处理
+            if time.time() - start_time > 90:
+                while self.is_running:
+                    if self.check_total_time_limit():
+                        return False
+                    if self.find_and_tap(get_path("start_button_zudui.png"), confidence=conf_val, do_tap=False):
+                        self.count += 1
+                        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                        self.log(f"第 {self.count} 轮超时检测到开始按钮，视为完成")
+                        return True
+                    else:
+                        self.log("超时检测未找到开始按钮，执行随机点击清理")
+                        self.full_screen_random_tap()
+                        time.sleep(1)  # 每次乱点后重置一点时间，避免疯狂点击
+
+                
             time.sleep(1)
 
         return False
@@ -896,7 +984,7 @@ class GameBotGUI:
         while self.is_running:
             if self.check_total_time_limit():
                 return False
-            if self.process_finish_mark_300():
+            if self.process_finish_mark_300(timeout=90):
                 while self.is_running:
                     if self.check_total_time_limit():
                         return False
@@ -905,21 +993,27 @@ class GameBotGUI:
                         self.count_label.config(text=f"已成功运行: {self.count} 轮")
                         self.log(f"第 {self.count} 轮结束，回到主界面")
                         return True
+                    else:
+                        self.log("未检测到开始按钮，继续等待...")
+                        self.full_screen_random_tap()  # 可能卡在结算界面，随机点击清理一下
                     time.sleep(1)
 
                 return False
 
             # 超_时/挂机处理
-            if time.time() - start_time > 100:
-                # --- 修正点 2：超时检测也要用变量 ---
-                if self.find_and_tap(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
-                    self.count += 1
-                    self.count_label.config(text=f"已成功运行: {self.count} 轮")
-                    return True
-
-                self.full_screen_random_tap()
-                # 每次乱点后重置一点时间，避免疯狂点击
-                start_time = time.time() - 5
+            if time.time() - start_time > 90:
+                while self.is_running:
+                    if self.check_total_time_limit():
+                        return False
+                    if self.find_and_tap(current_start_img, confidence=conf_val, do_tap=False):
+                        self.count += 1
+                        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                        self.log(f"第 {self.count} 轮超时检测到开始按钮，视为完成")
+                        return True
+                    else:
+                        self.log("超时检测未找到开始按钮，执行随机点击清理")
+                        self.full_screen_random_tap()
+                        time.sleep(1)  # 每次乱点后重置一点时间，避免疯狂点击
 
             time.sleep(1)
 
@@ -1037,7 +1131,8 @@ class GameBotGUI:
 
         # 1. 点击 battle_start
         if not self.wait_for_image(get_path("battle_start.png"), timeout=10, confidence=conf_val, do_tap=True):
-            self.log("未找到 battle_start.png，斗技终止。")
+            if not self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=conf_val, do_tap=True): 
+              self.log("未找到 battle_start.png，斗技终止。")
             return False
         time.sleep(1)
 
@@ -1129,6 +1224,130 @@ class GameBotGUI:
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
         threading.Thread(target=self.arena_logic, daemon=True).start()
+
+    def bezudui_cycle(self):
+        """执行一轮被组队流程:等待finish -> 点击确认 -> 点击 battle_start -> 等待 auto -> 进入战斗后轮询 finish 和 texie，直到检测到 finish 则点击并清理返回 True"""
+        conf_val = self.conf_slider.get()
+
+        # 等待 finish 标记出现，点击确认进入下一步
+        while self.is_running:
+            if self.check_total_time_limit():
+                return False
+            finish_imgs = [get_path("finish_mark.png"), get_path("finish_mark_sp.png")]
+            finish_detected = False
+            matched_finish_img = None
+            finish_start_t = time.time()
+            while self.is_running and time.time() - finish_start_t < 90:
+                if self.check_total_time_limit():
+                    return False
+
+                for finish_img in finish_imgs:
+                    if self.find_and_tap(finish_img, confidence=conf_val, do_tap=False):
+                        matched_finish_img = finish_img
+                        finish_detected = True
+                        break
+
+                if finish_detected:
+                    time.sleep(0.5)
+                    self.find_and_tap(matched_finish_img, confidence=conf_val, do_tap=True)
+                    break
+
+                time.sleep(1)
+
+            if finish_detected:
+                time.sleep(0.5)
+                self.wait_for_image(get_path("finish_mark_300.png"),timeout=10, confidence=0.7, do_tap=True)
+                time.sleep(0.5)
+                self.wait_for_image(get_path("zudui-accept.png"), timeout=20, confidence=conf_val, do_tap=True)
+                return True
+            time.sleep(2)
+    
+
+    def zudui_logic(self):
+        self.log("=== 组队挑战开始运行 ===")
+        conf_val = self.conf_slider.get()
+
+        # 获取当前目标轮数
+        try:
+            target_limit = int(self.limit_var.get())
+        except ValueError:
+            target_limit = 0
+            self.log("目标轮数格式错误，已默认为无限模式")
+
+        while self.is_running:
+            if self.check_total_time_limit():
+                break
+            # --- 新增：检查是否达到目标轮数 ---
+            if target_limit > 0 and self.count >= target_limit:
+                self.log(f"已达到目标轮数 {target_limit}，脚本自动停止。")
+                self.is_running = False
+                self.start_btn.config(state=tk.NORMAL)
+                self.stop_btn.config(state=tk.DISABLED)
+                break
+            if not self.run_dungeon_zudui(conf_val):
+                break
+
+
+    def start_zudui(self):
+        if not self.device_var.get():
+            messagebox.showwarning("警告", "请先选择一个设备！")
+            return
+
+        self.update_screen_size()
+        self.count = 0
+        self.start_total_time_control()
+        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+        self.is_running = True
+        self.start_btn.config(state=tk.DISABLED)
+        self.stop_btn.config(state=tk.NORMAL)
+        threading.Thread(target=self.zudui_logic, daemon=True).start()
+
+
+    def bezudui_logic(self):
+        try:
+            target_limit = int(self.limit_var.get())
+        except ValueError:
+            target_limit = 0
+            self.log("目标轮数格式错误，已默认为无限模式")
+
+        round_count = 0
+        while self.is_running:
+            if self.check_total_time_limit():
+                break
+            if target_limit > 0 and round_count >= target_limit:
+                self.log(f"被组队已达到目标轮数 {target_limit}，自动停止")
+                break
+
+            self.log(f"被组队第 {round_count + 1} 轮开始")
+            if self.bezudui_cycle():
+                round_count += 1
+                self.count = round_count
+                self.count_label.config(text=f"已成功运行: {self.count} 轮")
+                self.log(f"被组队第 {round_count} 轮结束")
+            else:
+                self.log("被组队本轮未完成，准备重试")
+
+            time.sleep(1)
+
+        self.log("被组队流程结束")
+        self.is_running = False
+        self.start_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+
+
+    def start_bezudui(self):
+        if not self.device_var.get():
+            messagebox.showwarning("警告", "请先选择一个设备！")
+            return
+
+        self.update_screen_size()
+        self.count = 0
+        self.start_total_time_control()
+        self.count_label.config(text=f"已成功运行: {self.count} 轮")
+        self.is_running = True
+        self.start_btn.config(state=tk.DISABLED)
+        self.stop_btn.config(state=tk.NORMAL)
+        threading.Thread(target=self.bezudui_logic, daemon=True).start()
 
     # ================= 线程运行控制 =================
     def start_task(self):
