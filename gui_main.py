@@ -22,6 +22,26 @@ def get_path(relative_path):
     return os.path.join(base_dir, "assets", relative_path)
 
 
+def load_image(image_path):
+    """兼容中文路径的图片读取。"""
+    try:
+        image_data = np.fromfile(image_path, dtype=np.uint8)
+        if image_data.size > 0:
+            image = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+            if image is not None:
+                return image
+    except Exception:
+        pass
+
+    # 作为回退，保留普通读取，兼容少数环境
+    return cv2.imread(image_path)
+
+
+def get_screenshot_dir():
+    """返回一个稳定可写的截图目录。"""
+    return os.path.join(os.path.expanduser("~"), "OnmyojiAuto", "screenshots")
+
+
 def get_default_adb_candidates():
     """根据系统返回可能存在的 adb 路径候选（按优先级）。"""
     system_name = platform.system()
@@ -407,7 +427,7 @@ class GameBotGUI:
 
     def find_and_tap(self, template_path, confidence=0.5, do_tap=True):
         # 此时 template_path 已经是 get_path 处理过的绝对路径了
-        template = cv2.imread(template_path)
+        template = load_image(template_path)
 
         if template is None:
             self.log(f"错误：无法读取资源文件 -> {os.path.basename(template_path)}")
@@ -448,6 +468,13 @@ class GameBotGUI:
                         self.root.after(0, lambda: messagebox.showinfo("提示", "有接取悬赏任务，记得完成！"))
                     except Exception:
                         pass
+
+                activity_img = get_path("activity.png")
+                # 与悬赏任务保持同级的全局扫描，但只点击不弹窗
+                if self.find_and_tap(activity_img, confidence=0.7, do_tap=False):
+                    self.log("检测到姑获鸟皮肤碎片,可能有活动弹窗，随机点击清理一下")
+                    self.full_screen_random_tap()  # 随机点击清理
+                    time.sleep(0.6)
             except Exception:
                 pass
 
@@ -481,14 +508,14 @@ class GameBotGUI:
         self.log("发现 finish_mark_300，开始扫描 ken.png 以确认掉落")
 
         # 3s 内找到 ken.png：+1 卷, 继续点击 finish_mark_300；未找到则结束本次流程
-        if self.wait_for_image(get_path("ken.png"), timeout=3, confidence=conf_val, do_tap=False):
+        if self.wait_for_image(get_path("ken.png"), timeout=2, confidence=conf_val, do_tap=False):
             self.log("扫描到 ken.png，结界突破卷 +1")
             self.increment_break_roll()
             self.wait_for_image(mark, timeout=5, confidence=conf_val, do_tap=True)
             self.log("点击 finish_mark_300 完成结算")
             return True
         else:
-            self.log("3s 内未扫描到 ken.png，退出本轮结算流程")
+            self.log("2s 内未扫描到 ken.png，退出本轮结算流程")
             self.wait_for_image(mark, timeout=5, confidence=conf_val, do_tap=True)
             self.log("点击 finish_mark_300 完成结算")
             return True
@@ -691,13 +718,13 @@ class GameBotGUI:
     def hard_28_cycle(self):
         self.log("开始一轮困难二十八流程：button_28 -> search -> 小怪5次 -> boss -> takara/search/button_28")
 
-        # 首先扫描 button_28，5s 没扫描到就跳过到 search 扫描
-        button_found = self.wait_for_image(get_path("button_28.png"), timeout=5, confidence=0.6, do_tap=True)
+        # 首先扫描 button_28，4s 没扫描到就跳过到 search 扫描
+        button_found = self.wait_for_image(get_path("button_28.png"), timeout=4, confidence=0.6, do_tap=True)
         if not button_found:
-            self.log("5s 内未找到 button_28.png，转到 search 扫描")
+            self.log("4s 内未找到 button_28.png，转到 search 扫描")
 
         # search 逻辑：扫描到直接进入，否则本轮结束
-        if not self.wait_for_image(get_path("search.png"), timeout=10, confidence=0.6, do_tap=True):
+        if not self.wait_for_image(get_path("search.png"), timeout=5, confidence=0.6, do_tap=True):
             self.log("未找到 search.png，结束本轮困难二十八流程")
             return False
 
@@ -705,7 +732,7 @@ class GameBotGUI:
         fight_count = 0
         swipe_retries = 0
         while self.is_running and fight_count < 5:
-            if self.wait_for_image(get_path("attack_28.png"), timeout=4, confidence=0.6, do_tap=True):
+            if self.wait_for_image(get_path("attack_28.png"), timeout=3, confidence=0.6, do_tap=True):
                 swipe_retries = 0
                 if self.process_finish_mark_300(timeout=20):
                     fight_count += 1
@@ -735,25 +762,24 @@ class GameBotGUI:
                 return True
 
         # takara/search/button_28 回退机制
-        if self.wait_for_image(get_path("takara.png"), timeout=5, confidence=0.8, do_tap=False):
+        if self.wait_for_image(get_path("takara.png"), timeout=2, confidence=0.8, do_tap=False):
             self.log("找到 takara.png，继续回到 search 流程")
             self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.6, do_tap=True)
             time.sleep(1)
             self.tap_confirm()
             return True
-        if self.wait_for_image(get_path("search.png"), timeout=5, confidence=0.6, do_tap=False):
-            self.log("5s内未找到 takara，找到 search.png，继续 search 流程")
+        if self.wait_for_image(get_path("search.png"), timeout=2, confidence=0.6, do_tap=False):
+            self.log("2s内未找到 takara，找到 search.png，继续 search 流程")
             return True
-        if self.wait_for_image(get_path("button_28.png"), timeout=5, confidence=0.6, do_tap=True):
-            self.log("5s内未找到 takara/search，找到 button_28.png，继续 button_28 流程")
+        if self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.6, do_tap=True):
+            self.log("2s内未找到 takara/search，找到 button_28.png，继续 button_28 流程")
             return True
 
         self.log("takara/search/button_28 均未找到，结束困难二十八流程")
-        self.log("找到 takara.png，继续回到 search 流程")
         self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.6, do_tap=True)
         time.sleep(1)
         self.tap_confirm()
-        return False
+        return True
 
     def hard_28_logic(self):
         while self.is_running:
@@ -1398,8 +1424,8 @@ class GameBotGUI:
                 messagebox.showerror("错误", "无法获取截图，请检查设备连接")
                 return
             
-            # 创建 screenshots 文件夹
-            screenshot_dir = os.path.join(os.path.dirname(__file__), "screenshots")
+            # 创建用户目录下的 screenshots 文件夹，避免程序目录不可写
+            screenshot_dir = get_screenshot_dir()
             os.makedirs(screenshot_dir, exist_ok=True)
             
             # 生成带时间戳的文件名
@@ -1408,12 +1434,12 @@ class GameBotGUI:
             filepath = os.path.join(screenshot_dir, filename)
             
             # 保存截图
-            cv2.imwrite(filepath, screenshot)
+            saved = cv2.imwrite(filepath, screenshot)
             
-            if os.path.exists(filepath):
+            if saved and os.path.exists(filepath):
                 file_size = os.path.getsize(filepath) / 1024  # 转换为 KB
                 self.log(f"✓ 截图已保存: {filename} ({file_size:.1f}KB)")
-                messagebox.showinfo("成功", f"截图已保存到:\nscreenshots\\{filename}")
+                messagebox.showinfo("成功", f"截图已保存到:\n{filepath}")
             else:
                 self.log("错误：保存截图失败")
                 messagebox.showerror("错误", "保存截图失败")
