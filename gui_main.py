@@ -69,7 +69,7 @@ def get_default_adb_candidates():
 class GameBotGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("痒痒鼠小助手 v2.0 - 结界突破/御魂/绘卷挂机")
+        self.root.title("痒痒鼠小助手 v2.1 - 适配阴阳师新UI")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
             if platform.system() == "Windows":
