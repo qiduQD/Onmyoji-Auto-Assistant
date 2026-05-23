@@ -89,7 +89,7 @@ def get_default_adb_candidates():
 class GameBotGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("痒痒鼠小助手 v2.3 - 已适配阴阳师新UI,多开组队，挂机斗技优化")
+        self.root.title("痒痒鼠小助手 v2.4 - 已适配阴阳师新UI,绘卷突破优化")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
             if platform.system() == "Windows":
@@ -146,7 +146,7 @@ class GameBotGUI:
                 "end": get_path("finish_mark_300.png")
             },
             "活动御魂300次": {
-                "start": get_path("start_button.png"),
+                "start": get_path("start_button_300.png"),
                 "end": get_path("finish_mark_300.png")
             },
             "御魂十": {
@@ -475,6 +475,10 @@ class GameBotGUI:
                     self.log("检测到姑获鸟皮肤碎片,可能有活动弹窗，随机点击清理一下")
                     self.full_screen_random_tap()  # 随机点击清理
                     time.sleep(0.6)
+                
+                if self.find_and_tap(get_path("confirm_button.png"), confidence=0.7, do_tap=True):
+                    self.log("检测到获得姑获鸟皮肤,可能有活动弹窗，点击确认")
+                    time.sleep(0.6)
             except Exception:
                 pass
 
@@ -507,15 +511,15 @@ class GameBotGUI:
 
         self.log("发现 finish_mark_300，开始扫描 ken.png 以确认掉落")
 
-        # 3s 内找到 ken.png：+1 卷, 继续点击 finish_mark_300；未找到则结束本次流程
-        if self.wait_for_image(get_path("ken.png"), timeout=2, confidence=conf_val, do_tap=False):
+        # 1s 内找到 ken.png：+1 卷, 继续点击 finish_mark_300；未找到则结束本次流程
+        if self.wait_for_image(get_path("ken.png"), timeout=1, confidence=conf_val, do_tap=False):
             self.log("扫描到 ken.png，结界突破卷 +1")
             self.increment_break_roll()
             self.wait_for_image(mark, timeout=5, confidence=conf_val, do_tap=True)
             self.log("点击 finish_mark_300 完成结算")
             return True
         else:
-            self.log("2s 内未扫描到 ken.png，退出本轮结算流程")
+            self.log("1s 内未扫描到 ken.png，退出本轮结算流程")
             self.wait_for_image(mark, timeout=5, confidence=conf_val, do_tap=True)
             self.log("点击 finish_mark_300 完成结算")
             return True
