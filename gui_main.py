@@ -451,7 +451,7 @@ class GameBotGUI:
             return True
         return False
 
-    def find_template_center(self, template_path, confidence=0.5, timeout=3, interval=0.5):
+    def find_template_center(self, template_path, confidence=0.5, timeout=4, interval=0.5):
         """在规定时间内循环识别模板并返回其中心坐标；不执行点击。"""
         template = load_image(template_path)
 
@@ -478,7 +478,7 @@ class GameBotGUI:
         self.log(f"等待超时: {os.path.basename(template_path)}，未识别到目标坐标")
         return None
 
-    def find_and_tap_in_region(self, template_path, center_x, center_y, region_w=500, region_h=300, confidence=0.5, timeout=3, interval=0.5):
+    def find_and_tap_in_region(self, template_path, center_x, center_y, region_w=500, region_h=300, confidence=0.5, timeout=4, interval=0.5):
         """在给定中心点附近的局部区域内循环识别并点击模板，直到超时。"""
         template = load_image(template_path)
 
@@ -560,7 +560,7 @@ class GameBotGUI:
 
             if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
                 if do_tap:
-                    time.sleep(0.5)  # 发现目标后先等 0.5 秒再点击
+                    time.sleep(0.3)  # 发现目标后先等 0.3 秒再点击
                     if not self.find_and_tap(template_path, confidence=confidence, do_tap=True):
                         self.log(f"警告：目标 {os.path.basename(template_path)} 在点击时未找到，可能是界面变化")
                         self.full_screen_random_tap()  # 随机点击清理一下，增加下一轮检测的成功率
@@ -827,7 +827,7 @@ class GameBotGUI:
         self.stop_btn.config(state=tk.DISABLED)
 
     def hard_28_cycle(self):
-        self.log("开始一轮困难二十八流程：button_28 -> search -> 小怪5次 -> boss -> takara/search/button_28")
+        self.log("开始一轮困难二十八流程：button_28 -> search -> 小怪 -> boss -> takara/search/button_28")
 
         # 首先扫描 button_28，4s 没扫描到就跳过到 search 扫描
         button_found = self.wait_for_image(get_path("button_28.png"), timeout=4, confidence=0.6, do_tap=True)
@@ -839,10 +839,13 @@ class GameBotGUI:
             self.log("未找到 search.png，结束本轮困难二十八流程")
             return False
         
-        # 进行5次小怪战斗
-        fight_count = 0
+        # 进行小怪战斗
         swipe_retries = 0
-        while self.is_running and fight_count < 5:
+        while self.is_running:
+            if self.find_and_tap(get_path("boss.png"), confidence=0.7, do_tap=False):
+                self.log("检测到 boss，跳过小怪阶段进入 boss 战")
+                break
+
             up_hit = self.find_template_center(get_path("up.png"), confidence=0.5)
             if up_hit:
                 up_x, up_y, up_conf = up_hit
@@ -850,8 +853,7 @@ class GameBotGUI:
                 if self.find_and_tap_in_region(get_path("attack_28.png"), up_x, up_y, region_w=500, region_h=600, confidence=0.6, timeout=3, interval=0.5):
                     swipe_retries = 0
                     if self.process_finish_mark_300(timeout=20):
-                        fight_count += 1
-                        self.log(f"挑战成功，完成第 {fight_count} 次小怪战斗")
+                        self.log("挑战成功")
                     else:
                         self.log("未检测到finish_mark_300，本次小怪不计数，继续重试")
 
@@ -864,12 +866,12 @@ class GameBotGUI:
             else:
                 self.log("未识别到 up.png，执行左滑刷新")
 
-            swipe_retries += 1
             self.swipe_left_full()
+            swipe_retries += 1
+            
             if swipe_retries >= 2:
                 self.log("连续两次刷新后仍未在 up.png 周边找到 attack_28，结束小怪战斗流程")
                 break
-
         # boss 战
         if self.wait_for_image(get_path("boss.png"), timeout=5, confidence=0.6, do_tap=True):
             self.process_finish_mark_300(timeout=20)
@@ -877,6 +879,7 @@ class GameBotGUI:
             if self.break_roll_count >= 27:
                 self.log("结界突破卷已达27，停止困难28循环")
                 return True
+
 
         # takara/search/button_28 回退机制
         if self.wait_for_image(get_path("takara.png"), timeout=2, confidence=0.8, do_tap=False):
