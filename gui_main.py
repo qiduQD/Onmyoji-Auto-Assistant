@@ -451,6 +451,82 @@ class GameBotGUI:
             return True
         return False
 
+    def find_template_center(self, template_path, confidence=0.5, timeout=3, interval=0.5):
+        """在规定时间内循环识别模板并返回其中心坐标；不执行点击。"""
+        template = load_image(template_path)
+
+        if template is None:
+            self.log(f"错误：无法读取资源文件 -> {os.path.basename(template_path)}")
+            return None
+
+        start_t = time.time()
+        while self.is_running and time.time() - start_t < timeout:
+            screen = self.get_screenshot()
+            if screen is None:
+                time.sleep(interval)
+                continue
+
+            h, w = template.shape[:2]
+            res = cv2.matchTemplate(screen, template, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+            if max_val >= confidence:
+                return max_loc[0] + w // 2, max_loc[1] + h // 2, max_val
+
+            time.sleep(interval)
+
+        self.log(f"等待超时: {os.path.basename(template_path)}，未识别到目标坐标")
+        return None
+
+    def find_and_tap_in_region(self, template_path, center_x, center_y, region_w=500, region_h=300, confidence=0.5, timeout=3, interval=0.5):
+        """在给定中心点附近的局部区域内循环识别并点击模板，直到超时。"""
+        template = load_image(template_path)
+
+        if template is None:
+            self.log(f"错误：无法读取资源文件 -> {os.path.basename(template_path)}")
+            return False
+
+        start_t = time.time()
+        while self.is_running and time.time() - start_t < timeout:
+            screen = self.get_screenshot()
+            if screen is None:
+                time.sleep(interval)
+                continue
+
+            screen_h, screen_w = screen.shape[:2]
+            half_w = region_w // 2
+            half_h = region_h // 2
+            left = max(0, int(center_x - half_w))
+            top = max(0, int(center_y - half_h))
+            right = min(screen_w, int(center_x + half_w))
+            bottom = min(screen_h, int(center_y + half_h))
+
+            region = screen[top:bottom, left:right]
+            if region.size == 0:
+                time.sleep(interval)
+                continue
+
+            h, w = template.shape[:2]
+            if region.shape[0] < h or region.shape[1] < w:
+                time.sleep(interval)
+                continue
+
+            res = cv2.matchTemplate(region, template, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+            if max_val >= confidence:
+                mw, mh = int(w * 0.1), int(h * 0.1)
+                tx = self.rng.randint(left + max_loc[0] + mw, left + max_loc[0] + w - mw)
+                ty = self.rng.randint(top + max_loc[1] + mh, top + max_loc[1] + h - mh)
+                self.adb_command(f"shell input tap {tx} {ty}")
+                self.log(f"命中: {os.path.basename(template_path)} ({max_val:.2f})，局部区域: ({left},{top})-({right},{bottom})")
+                return True
+
+            time.sleep(interval)
+
+        self.log(f"等待超时: {os.path.basename(template_path)}，局部区域扫描已结束")
+        return False
+
     def wait_for_image(self, template_path, timeout=60, confidence=0.5, do_tap=False, interval=1.0):
         start_t = time.time()
         while self.is_running and time.time() - start_t < timeout:
@@ -767,24 +843,31 @@ class GameBotGUI:
         fight_count = 0
         swipe_retries = 0
         while self.is_running and fight_count < 5:
-            if self.wait_for_image(get_path("attack_28.png"), timeout=3, confidence=0.6, do_tap=True):
-                swipe_retries = 0
-                if self.process_finish_mark_300(timeout=20):
-                    fight_count += 1
-                    self.log(f"挑战成功，完成第 {fight_count} 次小怪战斗")
-                else:
-                    self.log("未检测到finish_mark_300，本次小怪不计数，继续重试")
+            up_hit = self.find_template_center(get_path("up.png"), confidence=0.5)
+            if up_hit:
+                up_x, up_y, up_conf = up_hit
+                self.log(f"识别到 up.png 坐标: ({up_x}, {up_y})，置信度: {up_conf:.2f}")
+                if self.find_and_tap_in_region(get_path("attack_28.png"), up_x, up_y, region_w=500, region_h=600, confidence=0.6, timeout=3, interval=0.5):
+                    swipe_retries = 0
+                    if self.process_finish_mark_300(timeout=20):
+                        fight_count += 1
+                        self.log(f"挑战成功，完成第 {fight_count} 次小怪战斗")
+                    else:
+                        self.log("未检测到finish_mark_300，本次小怪不计数，继续重试")
 
-                if self.break_roll_count >= 27:
-                    self.log("结界突破卷已达到27，停止困难28循环")
-                    return True
-                continue
-            # 未检测到 attack_28，进行左滑刷新；最多重试两次，仍未找到则结束小怪阶段
+                    if self.break_roll_count >= 27:
+                        self.log("结界突破卷已达到27，停止困难28循环")
+                        return True
+                    continue
+
+                self.log("在 up.png 局部区域内未找到 attack_28，执行左滑刷新")
+            else:
+                self.log("未识别到 up.png，执行左滑刷新")
+
             swipe_retries += 1
-            self.log(f"第 {swipe_retries} 次未检测到 attack_28，执行左滑刷新")
             self.swipe_left_full()
             if swipe_retries >= 2:
-                self.log("连续两次刷新未找到 attack_28，结束小怪战斗流程")
+                self.log("连续两次刷新后仍未在 up.png 周边找到 attack_28，结束小怪战斗流程")
                 break
 
         # boss 战
