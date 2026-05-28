@@ -564,9 +564,6 @@ class GameBotGUI:
             return False
         time.sleep(3)
 
-        if not self.wait_for_image_II(get_path("unlock.png"), timeout=1, confidence=0.9, do_tap=True):
-            self.log("未找到 unlock 按钮，阵容已锁定")
-            time.sleep(0.3)
 
         base_slots = [
             (523, 584), (931, 584), (1325, 584),
@@ -586,34 +583,26 @@ class GameBotGUI:
                 return False
 
             self.log(f"点击第 {idx} 个位置: ({x},{y})")
-            
+            self.adb_command(f"shell input tap {x} {y}")
+            time.sleep(1.2)
+
+            # 等待出现 attack 按钮并进入战斗
+            if not self.wait_for_image_II(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
+                self.log("未找到 attack 按钮，跳过此位置")
+                continue
+
             # 普通8次逻辑
             if idx < 9:
-                self.adb_command(f"shell input tap {x} {y}")
-                time.sleep(1)
-
-                 # 等待出现 attack 按钮并进入战斗
-                if not self.wait_for_image_II(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
-                   self.log("未找到 attack 按钮，跳过此位置")
-                   continue
-                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=180, confidence=conf_val, do_tap=True)
+                
+                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
                 time.sleep(2)
-                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=3, confidence=conf_val, do_tap=True)
+                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=2, confidence=conf_val, do_tap=True)
                 self.log(f"第 {idx} 次位置战斗结束，继续下一个位置")
                 time.sleep(2)
                 continue
 
             # 第九次特殊逻辑 (额外处理)
             self.log("第九次特殊逻辑：4 次返回确认 + 重启 + 准备战斗")
-            if not self.wait_for_image_II(get_path("lock.png"), timeout=3, confidence=0.9, do_tap=True):
-                self.log("未找到 lock 按钮，阵容解锁")
-                time.sleep(0.2)
-            self.adb_command(f"shell input tap {x} {y}")
-            time.sleep(1)
-            if not self.wait_for_image_II(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
-                self.log("未找到 attack 按钮，跳过此位置")
-                self.wait_for_image_II(get_path("cancel.png"), timeout=10, confidence=conf_val, do_tap=True)
-                return True  # 跳过第九次的特殊流程，继续结界突破整体流程
             for round_i in range(1, 5):
                 if not self.is_running:
                     return False
@@ -625,10 +614,10 @@ class GameBotGUI:
                 self.wait_for_image_II(get_path("restart.png"), timeout=10, confidence=conf_val, do_tap=True)
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
-            self.wait_for_image_II(get_path("prepare.png"), timeout=3, confidence=conf_val, do_tap=True)
-            self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=180, confidence=conf_val, do_tap=True)
+            
+            self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=120, confidence=conf_val, do_tap=True)
             time.sleep(2)
-            self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=3, confidence=conf_val, do_tap=True)
+            self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
             self.log("第九次位置战斗结束，结界突破完成")
 
         self.log("结界突破整体完成")
