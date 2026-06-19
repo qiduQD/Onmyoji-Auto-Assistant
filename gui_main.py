@@ -127,7 +127,7 @@ class GameBotGUI:
                 "end": get_path("finish_mark_300.png")
             },
             "活动御魂300次": {
-                "start": get_path("start_button.png"),
+                "start": get_path("start_button_300.png"),
                 "end": get_path("finish_mark_300.png")
             },
             "御魂十": {
@@ -562,7 +562,7 @@ class GameBotGUI:
                    continue
                 self.wait_for_image(get_path("finish_mark_300.png"), timeout=180, confidence=conf_val, do_tap=True)
                 time.sleep(2)
-                self.wait_for_image(get_path("finish_mark_300.png"), timeout=3, confidence=conf_val, do_tap=True)
+                self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
                 self.log(f"第 {idx} 次位置战斗结束，继续下一个位置")
                 time.sleep(2)
                 continue
@@ -592,7 +592,7 @@ class GameBotGUI:
             self.wait_for_image(get_path("prepare.png"), timeout=3, confidence=conf_val, do_tap=True)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=180, confidence=conf_val, do_tap=True)
             time.sleep(2)
-            self.wait_for_image(get_path("finish_mark_300.png"), timeout=3, confidence=conf_val, do_tap=True)
+            self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
             self.log("第九次位置战斗结束，结界突破完成")
 
         self.log("结界突破整体完成")
