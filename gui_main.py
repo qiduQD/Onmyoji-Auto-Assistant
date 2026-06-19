@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import subprocess
 import secrets
+import base64
 import time
 import tkinter as tk
 from tkinter import scrolledtext, ttk, messagebox
@@ -374,11 +375,36 @@ class GameBotGUI:
         return self.rng.randint(base - offset, base + offset)
 
     def get_screenshot(self):
-        cmd = f'"{self.adb_path_entry.get()}" -s {self.device_var.get()} shell screencap -p'
-        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-        stdout, _ = process.communicate()
-        if not stdout: return None
-        return cv2.imdecode(np.frombuffer(stdout.replace(b'\r\n', b'\n'), np.uint8), cv2.IMREAD_COLOR)
+        adb = self.adb_path_entry.get()
+        dev = self.device_var.get()
+
+        # 直接使用 Base64 管道方式（已验证为稳定方案）
+        base64_cmds = [
+            f'"{adb}" -s {dev} exec-out screencap -p | base64',
+            f'"{adb}" -s {dev} shell screencap -p | base64'
+        ]
+        
+        for cmd in base64_cmds:
+            try:
+                process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout, stderr = process.communicate(timeout=10)
+                if stdout:
+                    try:
+                        # Base64 解码后转为图像
+                        binary_data = base64.b64decode(stdout.strip())
+                        img = cv2.imdecode(np.frombuffer(binary_data, np.uint8), cv2.IMREAD_COLOR)
+                        if img is not None:
+                            return img
+                    except Exception as e:
+                        self.log(f"Base64 解码失败: {e}")
+                        continue
+            except Exception as e:
+                self.log(f"截图命令异常: {e}")
+                continue
+
+        # 所有尝试都失败
+        self.log("截图失败：Base64 传输均未成功")
+        return None
 
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
@@ -1395,7 +1421,7 @@ class GameBotGUI:
             screenshot = self.get_screenshot()
             if screenshot is None:
                 self.log("错误：无法获取截图，请检查设备连接")
-                messagebox.showerror("错误", "无法获取截图，请检查设备连接")
+                self.root.after(0, lambda: messagebox.showerror("错误", "无法获取截图，请检查设备连接"))
                 return
             
             # 创建 screenshots 文件夹
@@ -1413,14 +1439,14 @@ class GameBotGUI:
             if os.path.exists(filepath):
                 file_size = os.path.getsize(filepath) / 1024  # 转换为 KB
                 self.log(f"✓ 截图已保存: {filename} ({file_size:.1f}KB)")
-                messagebox.showinfo("成功", f"截图已保存到:\nscreenshots\\{filename}")
+                self.root.after(0, lambda: messagebox.showinfo("成功", f"截图已保存到:\nscreenshots\\{filename}"))
             else:
                 self.log("错误：保存截图失败")
-                messagebox.showerror("错误", "保存截图失败")
+                self.root.after(0, lambda: messagebox.showerror("错误", "保存截图失败"))
                 
         except Exception as e:
             self.log(f"截图出错: {e}")
-            messagebox.showerror("错误", f"截图出错: {e}")
+            self.root.after(0, lambda: messagebox.showerror("错误", f"截图出错: {e}"))
 
     def run_logic(self):
         self.log("=== 脚本开始运行 ===")
