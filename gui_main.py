@@ -402,8 +402,8 @@ class GameBotGUI:
 
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
-        tx = self.rng.randint(500, 630)
-        ty = self.rng.randint(750, 850)
+        tx = self.rng.randint(560, 630)
+        ty = self.rng.randint(750, 800)
         self.log(f" -> [清理中] 随机点击: ({tx}, {ty})")
         self.adb_command(f"shell input tap {tx} {ty}")
 
@@ -474,10 +474,6 @@ class GameBotGUI:
                 if self.find_and_tap(activity_img, confidence=0.7, do_tap=False):
                     self.log("检测到姑获鸟皮肤碎片,可能有活动弹窗，随机点击清理一下")
                     self.full_screen_random_tap()  # 随机点击清理
-                    time.sleep(0.6)
-                
-                if self.find_and_tap(get_path("confirm_button.png"), confidence=0.7, do_tap=True):
-                    self.log("检测到获得姑获鸟皮肤,可能有活动弹窗，点击确认")
                     time.sleep(0.6)
             except Exception:
                 pass
@@ -596,7 +592,7 @@ class GameBotGUI:
                 
                 self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
                 time.sleep(2)
-                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=2, confidence=conf_val, do_tap=True)
+                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
                 self.log(f"第 {idx} 次位置战斗结束，继续下一个位置")
                 time.sleep(2)
                 continue
