@@ -544,17 +544,6 @@ class GameBotGUI:
                         self.root.after(0, lambda: messagebox.showinfo("提示", "有接取悬赏任务，记得完成！"))
                     except Exception:
                         pass
-
-                activity_img = get_path("activity.png")
-                # 与悬赏任务保持同级的全局扫描，但只点击不弹窗
-                if self.find_and_tap(activity_img, confidence=0.7, do_tap=False):
-                    self.log("检测到姑获鸟皮肤碎片,可能有活动弹窗，随机点击清理一下")
-                    self.full_screen_random_tap()  # 随机点击清理
-                    time.sleep(0.6)
-                
-                if self.find_and_tap(get_path("confirm_button.png"), confidence=0.7, do_tap=True):
-                    self.log("检测到获得姑获鸟皮肤,可能有活动弹窗，点击确认")
-                    time.sleep(0.6)
             except Exception:
                 pass
 
@@ -674,7 +663,7 @@ class GameBotGUI:
                    continue
                 self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=180, confidence=conf_val, do_tap=True)
                 time.sleep(2)
-                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=3, confidence=conf_val, do_tap=True)
+                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
                 self.log(f"第 {idx} 次位置战斗结束，继续下一个位置")
                 time.sleep(2)
                 continue
@@ -704,7 +693,7 @@ class GameBotGUI:
             self.wait_for_image_II(get_path("prepare.png"), timeout=3, confidence=conf_val, do_tap=True)
             self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=180, confidence=conf_val, do_tap=True)
             time.sleep(2)
-            self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=3, confidence=conf_val, do_tap=True)
+            self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
             self.log("第九次位置战斗结束，结界突破完成")
 
         self.log("结界突破整体完成")
