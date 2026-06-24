@@ -463,19 +463,18 @@ class GameBotGUI:
             if self.check_total_time_limit():
                 return False
 
-            # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png），若存在则点击并继续等待目标
-            try:
-                task_accept_img = get_path("task-accept.png")
-                # 使用较高置信度，若命中则直接点击（find_and_tap 会在命中时记录日志）
-                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
-                    time.sleep(0.6)
-                    try:
-                        # 在主线程弹出提示，避免在工作线程直接调用 tkinter
-                        self.root.after(0, lambda: messagebox.showinfo("提示", "有接取悬赏任务，记得完成！"))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+           # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png）
+           try:
+               task_accept_img = get_path("task-accept.png")
+               if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
+                   self.log("【系统提示】触发悬赏任务！已自动帮你接受，请记得及时完成。")
+                   # 触发系统蜂鸣声提示一下即可，不会卡死程序
+                   import sys
+                   sys.stdout.write('\a')
+                   sys.stdout.flush()
+                   time.sleep(0.6)
+             except Exception:
+                 pass
 
             if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
                 if do_tap:
