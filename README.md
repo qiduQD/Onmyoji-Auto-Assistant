@@ -1,5 +1,7 @@
 OnmyojiAuto-Assistant: A Cross-Platform Automation Framework Based on OpenCV and ADB
 
+##new: Adapt new OnmyojigameUI
+
 📋 Project Overview
 
 This project is an intelligent automation framework designed for the mobile game Onmyoji. It demonstrates the integration of Computer Vision (CV) and Asynchronous Control to solve repetitive task problems in mobile environments. Unlike traditional macro scripts, this system utilizes template matching for state recognition and adaptive coordinate scaling for cross-device compatibility.
