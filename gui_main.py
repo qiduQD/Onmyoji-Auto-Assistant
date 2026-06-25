@@ -91,7 +91,7 @@ class GameBotGUI:
         self.root = root
         # 初始化图片缓存字典
         self.image_cache = {}
-        self.root.title("痒痒鼠小助手 v2.4 - 已适配阴阳师新UI,绘卷突破优化")
+        self.root.title("痒痒鼠小助手 v3.0,整体优化完成")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
             if platform.system() == "Windows":
