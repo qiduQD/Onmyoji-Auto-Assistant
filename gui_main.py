@@ -464,7 +464,7 @@ class GameBotGUI:
                 return False
 
            # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png）
-           try:
+            try:
                task_accept_img = get_path("task-accept.png")
                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
                    self.log("【系统提示】触发悬赏任务！已自动帮你接受，请记得及时完成。")
@@ -473,7 +473,7 @@ class GameBotGUI:
                    sys.stdout.write('\a')
                    sys.stdout.flush()
                    time.sleep(0.6)
-             except Exception:
+            except Exception:
                  pass
 
             if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
