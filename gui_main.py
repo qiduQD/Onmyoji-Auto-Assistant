@@ -89,6 +89,8 @@ def get_default_adb_candidates():
 class GameBotGUI:
     def __init__(self, root):
         self.root = root
+        # 初始化图片缓存字典
+        self.image_cache = {}
         self.root.title("痒痒鼠小助手 v2.4 - 已适配阴阳师新UI,绘卷突破优化")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
@@ -263,9 +265,15 @@ class GameBotGUI:
 
     # ================= 智能化工具函数 =================
     def log(self, message):
-        now = time.strftime("%H:%M:%S", time.localtime())
-        self.log_area.insert(tk.END, f"[{now}] {message}\n")
-        self.log_area.see(tk.END)
+        timestamp = time.strftime("[%H:%M:%S]")
+        
+        # 定义一个修改界面的小函数
+        def update_text():
+            self.log_area.insert(tk.END, f"{timestamp} {message}\n")
+            self.log_area.see(tk.END)
+            
+        # 使用 after 将其安全地派发到主线程执行
+        self.root.after(0, update_text)
 
     def start_total_time_control(self):
         self.task_start_time = time.time()
@@ -394,11 +402,32 @@ class GameBotGUI:
         return self.rng.randint(base - offset, base + offset)
 
     def get_screenshot(self):
-        cmd = f'"{self.adb_path_entry.get()}" -s {self.device_var.get()} shell screencap -p'
-        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-        stdout, _ = process.communicate()
-        if not stdout: return None
-        return cv2.imdecode(np.frombuffer(stdout.replace(b'\r\n', b'\n'), np.uint8), cv2.IMREAD_COLOR)
+        # 1. 改为列表传参，避免使用 shell=True 带来的额外 cmd.exe 进程开销
+        cmd = [self.adb_path_entry.get(), "-s", self.device_var.get(), "shell", "screencap", "-p"]
+        
+        try:
+            import sys
+            # 2. 跨平台处理：在 Windows 下使用 creationflags 隐藏控制台，取代 shell=True
+            if sys.platform == "win32":
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, creationflags=0x08000000)
+            else:
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+            
+            # 3. 增加 timeout，防止模拟器卡死导致脚本线程永久阻塞
+            stdout, _ = process.communicate(timeout=5)
+            
+            if not stdout: 
+                return None
+                
+            # 直接内存解码返回
+            return cv2.imdecode(np.frombuffer(stdout.replace(b'\r\n', b'\n'), np.uint8), cv2.IMREAD_COLOR)
+            
+        except subprocess.TimeoutExpired:
+            self.log("警告：ADB 截图请求超时，模拟器可能卡顿")
+            return None
+        except Exception as e:
+            self.log(f"截图发生异常: {e}")
+            return None
 
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
@@ -425,21 +454,32 @@ class GameBotGUI:
         self.adb_command(f"shell input swipe {x} {y1} {x} {y2} 350")
         time.sleep(0.8)
 
-    def find_and_tap(self, template_path, confidence=0.5, do_tap=True):
-        # 此时 template_path 已经是 get_path 处理过的绝对路径了
-        template = load_image(template_path)
+    def find_and_tap(self, template_path, confidence=0.7, do_tap=True, screen=None):
+        # 1. 优先使用外部传入的截图，如果没有才自己截取
+        if screen is None:
+            screen = self.get_screenshot()
+            
+        if screen is None:
+            return False
 
+        # 2. 内存字典缓存模板图片（避免疯狂读取硬盘）
+        if not hasattr(self, 'image_cache'):
+            self.image_cache = {}
+            
+        if template_path not in self.image_cache:
+            self.image_cache[template_path] = load_image(template_path)
+            
+        template = self.image_cache[template_path]
+        
         if template is None:
             self.log(f"错误：无法读取资源文件 -> {os.path.basename(template_path)}")
             return False
 
-        screen = self.get_screenshot()
-        if screen is None: return False
-
+        # 3. 直接进入模板匹配核心算法 (这里直接用 screen，绝对不重复截图)
         h, w = template.shape[:2]
         res = cv2.matchTemplate(screen, template, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(res)
-
+        
         if max_val >= confidence:
             if do_tap:
                 mw, mh = int(w * 0.1), int(h * 0.1)
@@ -449,6 +489,7 @@ class GameBotGUI:
                 # 使用 os.path.basename 只显示文件名，不显示长路径
                 self.log(f"命中: {os.path.basename(template_path)} ({max_val:.2f})")
             return True
+            
         return False
 
     def wait_for_image(self, template_path, timeout=60, confidence=0.5, do_tap=False, interval=1.0):
@@ -456,66 +497,35 @@ class GameBotGUI:
         while self.is_running and time.time() - start_t < timeout:
             if self.check_total_time_limit():
                 return False
-
+            # 【优化点1】每轮循环只向模拟器要一次截图
+            current_screen = self.get_screenshot()
+            if current_screen is None:
+                time.sleep(interval)
+                continue
             # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png），若存在则点击并继续等待目标
             try:
                 task_accept_img = get_path("task-accept.png")
                 # 使用较高置信度，若命中则直接点击（find_and_tap 会在命中时记录日志）
-                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
+                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True, screen=current_screen):
+                    self.log("【系统提示】触发悬赏任务！已自动接受。")
+                    import sys
+                    sys.stdout.write('\a')
+                    sys.stdout.flush()
                     time.sleep(0.6)
-                    try:
-                        # 在主线程弹出提示，避免在工作线程直接调用 tkinter
-                        self.root.after(0, lambda: messagebox.showinfo("提示", "有接取悬赏任务，记得完成！"))
-                    except Exception:
-                        pass
-
-                activity_img = get_path("activity.png")
-                # 与悬赏任务保持同级的全局扫描，但只点击不弹窗
-                if self.find_and_tap(activity_img, confidence=0.7, do_tap=False):
-                    self.log("检测到姑获鸟皮肤碎片,可能有活动弹窗，随机点击清理一下")
-                    self.full_screen_random_tap()  # 随机点击清理
-                    time.sleep(0.6)
+                    continue # 既然点了弹窗，画面变了，直接进入下一轮循环重新截图
             except Exception:
                 pass
 
-            if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
+            # 检测目标图片，同样传入 current_screen
+            if self.find_and_tap(template_path, confidence=confidence, do_tap=False, screen=current_screen):
                 if do_tap:
-                    time.sleep(0.5)  # 发现目标后先等 0.5 秒再点击
+                    time.sleep(0.5) 
+                    # 此时画面可能变了，再次检测时让它内部重新截图确认
                     if not self.find_and_tap(template_path, confidence=confidence, do_tap=True):
-                        self.log(f"警告：目标 {os.path.basename(template_path)} 在点击时未找到，可能是界面变化")
-                        self.full_screen_random_tap()  # 随机点击清理一下，增加下一轮检测的成功率
+                        self.log(f"警告：目标 {os.path.basename(template_path)} 在点击时未找到")
+                        self.full_screen_random_tap()
                 return True
-            time.sleep(interval)
-        self.log(f"等待超时: {os.path.basename(template_path)}")
-        return False
-    
-    def wait_for_image_II(self, template_path, timeout=60, confidence=0.5, do_tap=False, interval=1.0):
-        start_t = time.time()
-        while self.is_running and time.time() - start_t < timeout:
-            if self.check_total_time_limit():
-                return False
-
-            # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png），若存在则点击并继续等待目标
-            try:
-                task_accept_img = get_path("task-accept.png")
-                # 使用较高置信度，若命中则直接点击（find_and_tap 会在命中时记录日志）
-                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
-                    time.sleep(0.6)
-                    try:
-                        # 在主线程弹出提示，避免在工作线程直接调用 tkinter
-                        self.root.after(0, lambda: messagebox.showinfo("提示", "有接取悬赏任务，记得完成！"))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            if self.find_and_tap(template_path, confidence=confidence, do_tap=False):
-                if do_tap:
-                    time.sleep(0.3)  # 发现目标后先等 0.3 秒再点击
-                    if not self.find_and_tap(template_path, confidence=confidence, do_tap=True):
-                        self.log(f"警告：目标 {os.path.basename(template_path)} 在点击时未找到，可能是界面变化")
-                        self.full_screen_random_tap()  # 随机点击清理一下，增加下一轮检测的成功率
-                return True
+            
             time.sleep(interval)
         self.log(f"等待超时: {os.path.basename(template_path)}")
         return False
@@ -555,7 +565,7 @@ class GameBotGUI:
 
         conf_val = self.conf_slider.get()
         # 1. 先找 break 按钮进入战斗选项入口
-        if not self.wait_for_image_II(get_path("break.png"), timeout=10, confidence=0.7, do_tap=True):
+        if not self.wait_for_image(get_path("break.png"), timeout=10, confidence=0.7, do_tap=True):
             self.log("未找到 break 按钮，结界突破终止。")
             return False
         time.sleep(3)
@@ -583,16 +593,16 @@ class GameBotGUI:
             time.sleep(1.2)
 
             # 等待出现 attack 按钮并进入战斗
-            if not self.wait_for_image_II(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
+            if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
                 self.log("未找到 attack 按钮，跳过此位置")
                 continue
 
             # 普通8次逻辑
             if idx < 9:
                 
-                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
+                self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
                 time.sleep(2)
-                self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
+                self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
                 self.log(f"第 {idx} 次位置战斗结束，继续下一个位置")
                 time.sleep(2)
                 continue
@@ -607,18 +617,18 @@ class GameBotGUI:
                 time.sleep(1)
                 self.tap_confirm_2()  # 点击确认返回
                 time.sleep(1)
-                self.wait_for_image_II(get_path("restart.png"), timeout=10, confidence=conf_val, do_tap=True)
+                self.wait_for_image(get_path("restart.png"), timeout=10, confidence=conf_val, do_tap=True)
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
             
-            self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=120, confidence=conf_val, do_tap=True)
+            self.wait_for_image(get_path("finish_mark_300.png"), timeout=120, confidence=conf_val, do_tap=True)
             time.sleep(2)
-            self.wait_for_image_II(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
+            self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
             self.log("第九次位置战斗结束，结界突破完成")
 
         self.log("结界突破整体完成")
         time.sleep(2)
-        self.wait_for_image_II(get_path("cancel.png"), timeout=10, confidence=conf_val, do_tap=True)
+        self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=conf_val, do_tap=True)
         return True
 
     def combat_option_logic(self):
@@ -657,7 +667,7 @@ class GameBotGUI:
                 self.adb_command(f"shell input tap {x} {y}")
                 time.sleep(2)
 
-                if not self.wait_for_image_II(get_path("attack.png"), timeout=3, confidence=0.45, do_tap=True):
+                if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=0.45, do_tap=True):
                     fail_count += 1
                     self.log(f"第 {idx} 个位置检测到 attack 失败，准备切换到下一个位置")
                     break
