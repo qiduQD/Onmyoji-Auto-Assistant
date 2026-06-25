@@ -783,7 +783,7 @@ class GameBotGUI:
                 break
 
         # boss 战
-        if self.wait_for_image(get_path("boss.png"), timeout=5, confidence=0.6, do_tap=True):
+        if self.wait_for_image(get_path("boss.png"), timeout=3, confidence=0.6, do_tap=True):
             self.process_finish_mark_300(timeout=20)
             time.sleep(3)
             if self.break_roll_count >= 27:
