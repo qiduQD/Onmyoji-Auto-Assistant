@@ -468,11 +468,7 @@ class GameBotGUI:
                task_accept_img = get_path("task-accept.png")
                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
                    self.log("【系统提示】触发悬赏任务！已自动帮你接受，请记得及时完成。")
-                   # 触发系统蜂鸣声提示一下即可，不会卡死程序
-                   import sys
-                   sys.stdout.write('\a')
-                   sys.stdout.flush()
-                   time.sleep(0.6)
+                   time.sleep(0.5)
             except Exception:
                  pass
 
