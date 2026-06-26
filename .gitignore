@@ -9,6 +9,7 @@ venv/
 # PyInstaller 打包生成的缓存和结果
 build/
 dist/
+screenshots/
 *.spec
 
 # 本地环境配置
