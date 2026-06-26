@@ -2,7 +2,7 @@ name: Build macOS App for Auto Assistant
 
 on:
   push:
-    branches: [ "MAC-version" ]
+    branches: [ "mac-only" ]
   workflow_dispatch:
 
 jobs:
@@ -10,11 +10,11 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    # 1. 拉取仓库 MAC-version 分支的代码
+    # 1. 拉取仓库 mac-only 分支的代码
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        ref: 'MAC-version'
+        ref: 'mac-only'
 
     # 2. 设置 Python 环境（升级到 3.12 以适配高版本 numpy）
     - name: Set up Python
