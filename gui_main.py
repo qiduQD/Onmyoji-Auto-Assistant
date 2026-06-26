@@ -605,7 +605,7 @@ class GameBotGUI:
                 continue
 
             # 普通8次逻辑
-            if idx > 9:
+            if idx < 9:
                 
                 self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
                 time.sleep(2)
