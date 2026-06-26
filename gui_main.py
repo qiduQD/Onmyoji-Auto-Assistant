@@ -391,6 +391,13 @@ class GameBotGUI:
         self.log(f" -> [confirm] 随机点击: ({x}, {y})")
         self.adb_command(f"shell input tap {x} {y}")
     
+    def tap_confirm_1(self):
+        # 为确认按钮提供替代点击：在指定区域随机点击
+        x = self.rng.randint(680, 700)
+        y = self.rng.randint(433, 465)
+        self.log(f" -> [confirm] 随机点击: ({x}, {y})")
+        self.adb_command(f"shell input tap {x} {y}")
+    
     def tap_cancel(self):
         # 为取消按钮提供替代点击：在指定区域随机点击
         x = self.rng.randint(30, 60)
@@ -598,7 +605,7 @@ class GameBotGUI:
                 continue
 
             # 普通8次逻辑
-            if idx < 9:
+            if idx > 9:
                 
                 self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
                 time.sleep(2)
@@ -618,6 +625,11 @@ class GameBotGUI:
                 self.tap_confirm_2()  # 点击确认返回
                 time.sleep(1)
                 self.wait_for_image(get_path("restart.png"), timeout=10, confidence=conf_val, do_tap=True)
+                if self.count == 0:
+                    self.wait_for_image(get_path("daliy_confirm.png"), timeout=1, confidence=conf_val, do_tap=False)
+                    self.tap_confirm_1()  # 点击每日首次确认
+                    self.wait_for_image(get_path("daliy_confirm_button.png"), timeout=1, confidence=conf_val, do_tap=True)
+                time.sleep(1)
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
             
@@ -869,6 +881,9 @@ class GameBotGUI:
                if not self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.7, do_tap=False):
                   self.wait_for_image(get_path("back_button.png"), timeout=3, confidence=0.7, do_tap=True)
                   time.sleep(1)
+
+            self.count += 1
+            self.count_label.config(text=f"已成功获取一轮突破卷: {self.count} 轮")
 
             # 结界突破模式循环3次（3次9格=27次战斗）
             for i in range(3):
