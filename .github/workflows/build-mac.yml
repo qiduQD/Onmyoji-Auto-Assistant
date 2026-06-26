@@ -1,6 +1,5 @@
 name: Build macOS App for Auto Assistant
 
-# 触发条件：当推送到 MAC-version 分支，或者手动触发时运行
 on:
   push:
     branches: [ "MAC-version" ]
@@ -17,11 +16,11 @@ jobs:
       with:
         ref: 'MAC-version'
 
-    # 2. 设置 Python 环境
+    # 2. 设置 Python 环境（升级到 3.12 以适配高版本 numpy）
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10' # 根据你的开发环境，可调整为 3.9 或 3.11
+        python-version: '3.12'
 
     # 3. 安装依赖库
     - name: Install dependencies
@@ -29,11 +28,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install pyinstaller
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        # 显式安装核心依赖，防止 requirements.txt 漏掉导致云端打包失败
         pip install opencv-python pillow
 
-    # 4. 执行你指定的 PyInstaller 打包命令
-    # 额外添加了 --hidden-import 确保 OpenCV 和 Pillow 动态库被正确捕获
+    # 4. 执行 PyInstaller 打包
     - name: Build with PyInstaller
       run: |
         pyinstaller --clean \
@@ -46,13 +43,12 @@ jobs:
           gui_main.py
 
     # 5. 将生成的 OnmyojiAssistant.app 打包成 zip
-    # 注意：Mac 的 .app 实际上是一个文件夹，必须压缩后才能在网络上传输，否则权限会丢失
     - name: Compress App Bundle
       run: |
         cd dist
         zip -r ../OnmyojiAssistant-Mac.zip OnmyojiAssistant.app
 
-    # 6. 上传打包好的 zip 文件到 GitHub Actions 产物中
+    # 6. 上传打包好的 zip 文件
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
