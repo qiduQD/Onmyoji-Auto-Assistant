@@ -22,6 +22,20 @@ def get_path(relative_path):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_dir, "assets", relative_path)
 
+def load_image(image_path):
+    """兼容中文路径的图片读取。"""
+    try:
+        image_data = np.fromfile(image_path, dtype=np.uint8)
+        if image_data.size > 0:
+            image = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+            if image is not None:
+                return image
+    except Exception:
+        pass
+
+    # 作为回退，保留普通读取，兼容少数环境
+    return cv2.imread(image_path)
+
 
 def get_default_adb_candidates():
     """根据系统返回可能存在的 adb 路径候选（按优先级）。"""
@@ -72,7 +86,7 @@ class GameBotGUI:
         # 初始化图片缓存字典
         self.image_cache = {}
         self.root = root
-        self.root.title("痒痒鼠小助手 v2.3 - 已适配阴阳师新UI,多开组队，挂机斗技优化")
+        self.root.title("痒痒鼠小助手 v3.0 -only 整体优化，困28只刷红达摩")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
             if platform.system() == "Windows":
@@ -630,15 +644,15 @@ class GameBotGUI:
 
         self.log("发现 finish_mark_300，开始扫描 ken.png 以确认掉落")
 
-        # 3s 内找到 ken.png：+1 卷, 继续点击 finish_mark_300；未找到则结束本次流程
-        if self.wait_for_image(get_path("ken.png"), timeout=3, confidence=conf_val, do_tap=False):
+        # 1s 内找到 ken.png：+1 卷, 继续点击 finish_mark_300；未找到则结束本次流程
+        if self.wait_for_image(get_path("ken.png"), timeout=1, confidence=conf_val, do_tap=False):
             self.log("扫描到 ken.png，结界突破卷 +1")
             self.increment_break_roll()
             self.wait_for_image(mark, timeout=5, confidence=conf_val, do_tap=True)
             self.log("点击 finish_mark_300 完成结算")
             return True
         else:
-            self.log("3s 内未扫描到 ken.png，退出本轮结算流程")
+            self.log("1s 内未扫描到 ken.png，退出本轮结算流程")
             self.wait_for_image(mark, timeout=5, confidence=conf_val, do_tap=True)
             self.log("点击 finish_mark_300 完成结算")
             return True
@@ -862,7 +876,7 @@ class GameBotGUI:
             if up_hit:
                 up_x, up_y, up_conf = up_hit
                 self.log(f"识别到红达摩坐标: ({up_x}, {up_y})，置信度: {up_conf:.2f}")
-                if self.find_and_tap_in_region(get_path("attack_28.png"), up_x, up_y, region_w=500, region_h=600, confidence=0.6, timeout=3, interval=0.5):
+                if self.find_and_tap_in_region(get_path("attack_28.png"), up_x, up_y, region_w=600, region_h=600, confidence=0.6, timeout=3, interval=0.5):
                     swipe_retries = 0
                     if self.process_finish_mark_300(timeout=20):
                         self.log("挑战成功")
@@ -887,7 +901,7 @@ class GameBotGUI:
         # boss 战
         if self.wait_for_image(get_path("boss.png"), timeout=1, confidence=0.6, do_tap=True):
             self.process_finish_mark_300(timeout=20)
-            time.sleep(3)
+            time.sleep(2)
             if self.break_roll_count >= 27:
                 self.log("结界突破卷已达27，停止困难28循环")
                 return True
