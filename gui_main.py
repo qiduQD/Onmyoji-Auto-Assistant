@@ -603,10 +603,7 @@ class GameBotGUI:
                 # 使用较高置信度，若命中则直接点击（find_and_tap 会在命中时记录日志）
                 if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True, screen=current_screen):
                     self.log("【系统提示】触发悬赏任务！已自动接受。")
-                    import sys
-                    sys.stdout.write('\a')
-                    sys.stdout.flush()
-                    time.sleep(0.6)
+                    time.sleep(0.5)  # 等待画面刷新
                     continue # 既然点了弹窗，画面变了，直接进入下一轮循环重新截图
             except Exception:
                 pass
@@ -901,7 +898,7 @@ class GameBotGUI:
         # boss 战
         if self.wait_for_image(get_path("boss.png"), timeout=1, confidence=0.6, do_tap=True):
             self.process_finish_mark_300(timeout=20)
-            time.sleep(2)
+            time.sleep(3)
             if self.break_roll_count >= 27:
                 self.log("结界突破卷已达27，停止困难28循环")
                 return True

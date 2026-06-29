@@ -1,8 +1,8 @@
 name: Build macOS App for Auto Assistant
 
 on:
-  push:
-    branches: [ "mac-only" ]
+  #push:
+  #  branches: [ "mac-only" ]
   workflow_dispatch:
 
 jobs:
