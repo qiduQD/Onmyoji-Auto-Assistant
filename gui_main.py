@@ -1313,7 +1313,7 @@ class GameBotGUI:
         while self.is_running:
             if self.check_total_time_limit():
                 return False
-            finish_imgs = [get_path("finish_mark.png"), get_path("finish_mark_sp.png")]
+            finish_imgs = [get_path("finish_mark.png"), get_path("finish_mark_sp.png"), get_path("finish_mark_sp_2.png")]
             finish_detected = False
             matched_finish_img = None
             finish_start_t = time.time()
