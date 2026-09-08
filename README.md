@@ -1,46 +1,105 @@
-OnmyojiAuto-Assistant: A Cross-Platform Automation Framework Based on OpenCV and ADB
+# 痒痒鼠小助手 (Onmyoji Assistant) v3.0 
 
-##new: Adapt new OnmyojigameUI
+基于 Python + OpenCV 图像识别与 ADB 底层控制的《阴阳师》跨平台自动化挂机助手。
+v3.0 版本经历了深度底层重构，彻底移除了磁盘 I/O 截图依赖，采用纯内存流处理，为低配电脑和 Mac 平台提供了极佳的稳定性和性能表现。
 
-📋 Project Overview
+## ✨ 核心特性 (Features)
 
-This project is an intelligent automation framework designed for the mobile game Onmyoji. It demonstrates the integration of Computer Vision (CV) and Asynchronous Control to solve repetitive task problems in mobile environments. Unlike traditional macro scripts, this system utilizes template matching for state recognition and adaptive coordinate scaling for cross-device compatibility.
+* **纯视觉防封号体系**：采用 `cv2.matchTemplate` 进行非侵入式图像模板匹配，所有点击操作均加入随机区域偏移 (`rng.randint`)，模拟真人操作轨迹，绝对不读写游戏内存。
+* **极致的底层性能优化**：
+* **零磁盘 I/O**：使用 ADB `exec-out` / Base64 管道直接将截图字节流传输至内存解码，彻底告别频繁读写硬盘导致的卡顿。
+* **字典级内存缓存**：模板图片在首次读取后常驻字典缓存，大幅降低 CPU 算力消耗。
 
-🚀 Key Technical Features
 
-1. Computer Vision-Based State Machine
-Template Matching: Utilizes cv2.matchTemplate with Normalized Cross-Correlation (TM_CCOEFF_NORMED) to identify UI elements.
+* **跨平台深度适配**：
+* **Windows**：自动隐藏后台命令提示符黑窗口，支持多路径 ADB 盲查。
+* **macOS**：专门针对 Mac 生态优化，原生支持 **MuMu Player Pro (Mac 专属版)** 内置 ADB 路径直连。
 
-Confidence Thresholding: Implements dynamic threshold filtering to balance between precision and recall, ensuring robust performance under different rendering conditions.
 
-2. Adaptive System Architecture
-Resolution Calibration: Automatically retrieves device resolution via wm size and normalizes the coordinate system (e.g., 1600x900) to ensure click accuracy regardless of the source device's aspect ratio.
+* **全场景业务覆盖**：
+* **副本模式**：御魂（十、十一、十二）、御灵、业原火、活动限时副本全自动结算。
+* **突破模式**：结界突破（9宫格全自动 + 满票自动清）、阴阳寮突破（8宫格轮询自动防失败死锁）。
+* **探索模式**：困难二十八全自动带狗粮（遇 Boss 自动打，无怪自动左右滑动刷新）。
+* **综合模式（绘卷/爆肝专属）**：智能穿插副本与突破。刷本集齐门票 自动切换结界突破清理，自动切回副本循环。
+* **多人与竞技**：斗技全自动（智能识别特写动画）、自动组队与被组队接受。
 
-Non-Blocking Concurrency: Leverages Python's threading and subprocess modules to separate the GUI event loop from the automation logic, preventing UI freezing during heavy CV processing.
 
-3. Intelligent Decision Logic
-Randomized Human-Like Interaction: Implements Gaussian-distributed random offsets for tap coordinates and randomized sleep intervals to simulate human behavior and evade basic anti-cheat heuristics.
 
-Battle State Monitoring: A continuous loop monitoring system that detects victory/defeat states and handles unexpected timeouts or pop-ups.
+## 🛠️ 环境依赖 (Prerequisites)
 
-🛠️ Development & Engineering Practices
+1. **Python 环境**: 推荐 Python 3.8 或以上版本。
+2. **核心依赖库**:
+```bash
+pip install opencv-python numpy
 
-Object-Oriented Design (OOD): The entire system is encapsulated within a GameBotGUI class, promoting code reusability and maintainability.
+```
 
-Resource Virtualization: Uses a customized get_path utility to handle resource mapping for both source execution and frozen binary (PyInstaller) environments.
 
-Environment Isolation: Developed using isolated virtual environments (venv) to manage dependencies like numpy and opencv-python.
+3. **安卓模拟器建议 (推荐使用 MuMu 模拟器 12 或 MuMu Player Pro)**:
+* 分辨率建议：`1600 x 900`
+* 性能建议：分配 `2核/2GB` 或 `4核/4GB` 即可，勿将物理内存全部分配给模拟器，需为后台运行留出空间。
 
-📊 System Logic Flow
 
-Initialization: ADB handshake and device resolution calibration.
 
-Recognition: Captures screen buffer via ADB, decodes into NumPy arrays for OpenCV processing.
+## 🚀 快速开始 (Quick Start)
 
-Action: Calculates randomized coordinates and dispatches input tap commands via ADB shell.
+1. **克隆项目**:
+```bash
+git clone https://github.com/qiduQD/Onmyoji-Auto-Assistant.git
+cd Onmyoji-Auto-Assistant
 
-Loop: State transition from "Waiting" to "In-Battle" to "Settlement".
+```
 
-📧 Contact & Motivation
 
-This project serves as a practical application of Embodied AI and Edge Computing concepts—minimizing computational overhead while maintaining high task accuracy. It reflects my proficiency in Python development, system integration, and problem-solving within the IoT/AI domain.
+2. **准备资源图片**:
+确保 `assets` 文件夹中包含完整的目标模板截图（如 `start_button.png`, `finish_mark_300.png` 等）。
+3. **运行程序**:
+```bash
+python gui_main.py
+
+```
+
+
+
+## 🕹️ 使用说明 (Usage)
+
+1. **启动模拟器**并打开《阴阳师》至游戏主界面。
+2. 打开小助手 GUI，**设备选择区**会自动扫描并列出当前在线的 ADB 设备（若未显示，可点击“刷新设备列表”）。
+3. 选择你需要挂机的**目标关卡/模式**（通过下拉菜单）。
+4. （可选）设置**识别阈值**（建议保持默认的 0.7~0.8）。
+5. （可选）在底部设置**目标轮数**或**总时长**限制，防止疲劳游戏（输入 `0` 为无限挂机）。
+6. 点击对应模式的**启动按钮**，程序开始后台挂机。右侧日志窗口会实时输出运行状态。
+
+## 🚨 常见问题与排错 (FAQ)
+
+**Q1：程序提示“获取设备失败”或列表为空怎么办？**
+
+* **排查 1 (开发者选项)**：请确保模拟器设置中已开启【开启 ADB 调试 / 开发者模式】。
+* **排查 2 (致命坑点 - 网络桥接)**：请进入模拟器设置 $\rightarrow$ 【网络设置】，**务必确保【网络桥接模式】处于关闭状态**。开启桥接会导致 ADB 监听脱离本地局域网（127.0.0.1）导致连接失败。
+
+**Q2：运行一段时间后，电脑明显变得卡顿怎么办？**
+
+* 程序的底层代码已极大降低了开销，若依然卡顿，通常是因为模拟器占据了过多的 CPU 和内存资源。请**降低模拟器的硬件分配**（如降至 2 核 4G），并将本程序的运行目录及 `adb.exe` 加入 Windows Defender / 杀毒软件的白名单，防止其高频拦截 I/O 请求。
+
+**Q3：部分按钮识别不到、点击没反应？**
+
+* 请检查模拟器分辨率是否异形，尽量使用标准的 16:9 比例（如 1600x900）。也可以适当调低 GUI 界面上的**识别阈值**（例如拉到 0.6）。
+
+## 📝 目录结构 (Directory Structure)
+
+```text
+Onmyoji-Auto-Assistant/
+├── gui_main.py          # 主程序入口及 GUI 逻辑
+├── assets/              # 资源库 (需放置所有游戏 UI 的截屏小图及 adb 工具)
+│   ├── adb.exe          # Windows adb 工具 (打包内置)
+│   ├── adb              # macOS/Linux adb 工具 (打包内置)
+│   ├── app.ico / app.png# GUI 窗口图标
+│   └── *.png            # 用于 OpenCV 匹配的特征图片
+└── README.md            # 项目说明文档
+
+```
+
+## ⚠️ 免责声明 (Disclaimer)
+
+本项目仅作为计算机视觉（Computer Vision）与 Android 自动化控制架构的学术研究与学习交流使用。
+请合理安排游戏时间，适度娱乐。使用者因使用本工具而造成的任何账号处罚或损失，由使用者自行承担，开发者不负任何连带责任。
