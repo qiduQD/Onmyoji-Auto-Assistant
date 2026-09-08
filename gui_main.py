@@ -143,6 +143,10 @@ class GameBotGUI:
         self.adb_path_entry.pack()
         # 关卡名称与对应图片文件的映射
         self.level_map = {
+            "周年庆999": {
+                "start": get_path("start_button_300.png"),
+                "end": get_path("finish_mark_999.png")
+            },
             "英杰等普通耗3体副本": {
                 "start": get_path("start_button_3.png"),
                 "end": get_path("finish_mark_300.png")
@@ -438,8 +442,8 @@ class GameBotGUI:
 
     def full_screen_random_tap(self):
         # 基于自动获取的分辨率计算安全区域随机点击
-        tx = self.rng.randint(560, 630)
-        ty = self.rng.randint(750, 800)
+        tx = self.rng.randint(460, 630)
+        ty = self.rng.randint(800, 900)
         self.log(f" -> [清理中] 随机点击: ({tx}, {ty})")
         self.adb_command(f"shell input tap {tx} {ty}")
 
@@ -452,14 +456,6 @@ class GameBotGUI:
         self.adb_command(f"shell input swipe {x1} {y} {x2} {y} 300")
         time.sleep(0.8)
 
-    def swipe_up_full(self):
-        # 每轮结束后上滑刷新目标列表
-        x = int(self.screen_w * 0.5)
-        y1 = int(self.screen_h * 0.78)
-        y2 = int(self.screen_h * 0.30)
-        self.log(f" -> [刷新] 上滑屏幕: ({x},{y1}) -> ({x},{y2})")
-        self.adb_command(f"shell input swipe {x} {y1} {x} {y2} 350")
-        time.sleep(0.8)
 
     def find_and_tap(self, template_path, confidence=0.7, do_tap=True, screen=None):
         # 1. 优先使用外部传入的截图，如果没有才自己截取
@@ -629,6 +625,7 @@ class GameBotGUI:
                     self.wait_for_image(get_path("daliy_confirm.png"), timeout=1, confidence=conf_val, do_tap=False)
                     self.tap_confirm_1()  # 点击每日首次确认
                     self.wait_for_image(get_path("daliy_confirm_button.png"), timeout=1, confidence=conf_val, do_tap=True)
+                    self.count += 1
                 time.sleep(1)
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
@@ -679,7 +676,7 @@ class GameBotGUI:
                 self.adb_command(f"shell input tap {x} {y}")
                 time.sleep(2)
 
-                if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=0.45, do_tap=True):
+                if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=0.8, do_tap=True):
                     fail_count += 1
                     self.log(f"第 {idx} 个位置检测到 attack 失败，准备切换到下一个位置")
                     break
@@ -722,7 +719,6 @@ class GameBotGUI:
 
         self.log("阴阳寮突破本轮完成")
         time.sleep(1)
-        self.swipe_up_full()
         return True
 
     def combat_option_8_logic(self):
@@ -928,7 +924,7 @@ class GameBotGUI:
                 while self.is_running:
                     if self.check_total_time_limit():
                         return False
-                    if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
+                    if self.wait_for_image(current_start_img, timeout=2, confidence=conf_val, do_tap=False):
                         self.count += 1
                         self.count_label.config(text=f"已成功运行: {self.count} 轮")
                         self.log(f"第 {self.count} 轮结束，回到主界面")
