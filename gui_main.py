@@ -456,6 +456,14 @@ class GameBotGUI:
         self.adb_command(f"shell input swipe {x1} {y} {x2} {y} 300")
         time.sleep(0.8)
 
+    def swipe_up_full(self):
+        # 每轮结束后上滑刷新目标列表
+        x = self.rng.randint(1332, 1554)
+        y1 = int(200)
+        y2 = int(635)
+        self.log(f" -> [刷新] 上滑屏幕: ({x},{y2}) -> ({x},{y1})")
+        self.adb_command(f"shell input swipe {x} {y2} {x} {y1} 300")
+        time.sleep(0.8)
 
     def find_and_tap(self, template_path, confidence=0.7, do_tap=True, screen=None):
         # 1. 优先使用外部传入的截图，如果没有才自己截取
@@ -756,10 +764,20 @@ class GameBotGUI:
     def hard_28_cycle(self):
         self.log("开始一轮困难二十八流程：button_28 -> search -> 小怪5次 -> boss -> takara/search/button_28")
 
-        # 首先扫描 button_28，4s 没扫描到就跳过到 search 扫描
-        button_found = self.wait_for_image(get_path("button_28.png"), timeout=4, confidence=0.6, do_tap=True)
+        # 首先扫描 button_28，3s 没扫描到就跳过到 search 扫描
+        button_found = self.wait_for_image(get_path("button_28.png"), timeout=3, confidence=0.9, do_tap=True)
         if not button_found:
-            self.log("4s 内未找到 button_28.png，转到 search 扫描")
+            if self.wait_for_image(get_path("break.png"), timeout=1, confidence=0.7, do_tap=False):
+                self.log("3s 内未找到 button_28.png，但检测到 break.png，尝试寻找button_28.png并点击")
+                for attempt in range(5):
+                    self.swipe_up_full()
+                    self.log(f"第 {attempt + 1} 次上滑刷新后尝试寻找 button_28.png")
+                    if self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.85, do_tap=True):
+                        self.log("成功找到 button_28.png 并点击")
+                        button_found = True
+                        break
+            self.log("3s 内未找到 button_28.png，转到 search 扫描")
+
 
         # search 逻辑：扫描到直接进入，否则本轮结束
         if not self.wait_for_image(get_path("search.png"), timeout=5, confidence=0.6, do_tap=True):
@@ -869,13 +887,13 @@ class GameBotGUI:
                 continue
 
             self.log("结界突破卷达标(>=27)，执行返回并确认")
-            if not self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.7, do_tap=False):
+            if not self.wait_for_image(get_path("break.png"), timeout=2, confidence=0.7, do_tap=False):
                if not self.wait_for_image(get_path("search.png"), timeout=2, confidence=0.7, do_tap=False):
                   self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.7, do_tap=True)
                   time.sleep(1)
                   self.tap_confirm()
                   time.sleep(1)
-               if not self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.7, do_tap=False):
+               if not self.wait_for_image(get_path("break.png"), timeout=2, confidence=0.7, do_tap=False):
                   self.wait_for_image(get_path("back_button.png"), timeout=3, confidence=0.7, do_tap=True)
                   time.sleep(1)
 
