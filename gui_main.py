@@ -424,11 +424,11 @@ class GameBotGUI:
 
     def swipe_up_full(self):
         # 每轮结束后上滑刷新目标列表
-        x = int(self.screen_w * 0.5)
-        y1 = int(self.screen_h * 0.78)
-        y2 = int(self.screen_h * 0.30)
-        self.log(f" -> [刷新] 上滑屏幕: ({x},{y1}) -> ({x},{y2})")
-        self.adb_command(f"shell input swipe {x} {y1} {x} {y2} 350")
+        x = self.rng.randint(1332, 1554)
+        y1 = int(200)
+        y2 = int(635)
+        self.log(f" -> [刷新] 上滑屏幕: ({x},{y2}) -> ({x},{y1})")
+        self.adb_command(f"shell input swipe {x} {y2} {x} {y1} 300")
         time.sleep(0.8)
 
     def find_and_tap(self, template_path, confidence=0.5, do_tap=True):
@@ -523,9 +523,6 @@ class GameBotGUI:
             return False
         time.sleep(3)
 
-        if not self.wait_for_image(get_path("unlock.png"), timeout=1, confidence=0.9, do_tap=True):
-            self.log("未找到 unlock 按钮，阵容已锁定")
-            time.sleep(0.3)
 
         base_slots = [
             (523, 584), (931, 584), (1325, 584),
@@ -545,17 +542,18 @@ class GameBotGUI:
                 return False
 
             self.log(f"点击第 {idx} 个位置: ({x},{y})")
-            
+            self.adb_command(f"shell input tap {x} {y}")
+            time.sleep(1.2)
+
+            # 等待出现 attack 按钮并进入战斗
+            if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
+                self.log("未找到 attack 按钮，跳过此位置")
+                continue
+
             # 普通8次逻辑
             if idx < 9:
-                self.adb_command(f"shell input tap {x} {y}")
-                time.sleep(1)
-
-                 # 等待出现 attack 按钮并进入战斗
-                if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
-                   self.log("未找到 attack 按钮，跳过此位置")
-                   continue
-                self.wait_for_image(get_path("finish_mark_300.png"), timeout=180, confidence=conf_val, do_tap=True)
+                
+                self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
                 time.sleep(2)
                 self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
                 self.log(f"第 {idx} 次位置战斗结束，继续下一个位置")
@@ -564,15 +562,6 @@ class GameBotGUI:
 
             # 第九次特殊逻辑 (额外处理)
             self.log("第九次特殊逻辑：4 次返回确认 + 重启 + 准备战斗")
-            if not self.wait_for_image(get_path("lock.png"), timeout=3, confidence=0.9, do_tap=True):
-                self.log("未找到 lock 按钮，阵容解锁")
-                time.sleep(0.2)
-            self.adb_command(f"shell input tap {x} {y}")
-            time.sleep(1)
-            if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
-                self.log("未找到 attack 按钮，跳过此位置")
-                self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=conf_val, do_tap=True)
-                return True  # 跳过第九次的特殊流程，继续结界突破整体流程
             for round_i in range(1, 5):
                 if not self.is_running:
                     return False
@@ -582,10 +571,16 @@ class GameBotGUI:
                 self.tap_confirm_2()  # 点击确认返回
                 time.sleep(1)
                 self.wait_for_image(get_path("restart.png"), timeout=10, confidence=conf_val, do_tap=True)
+                if self.count == 0:
+                    self.wait_for_image(get_path("daliy_confirm.png"), timeout=1, confidence=conf_val, do_tap=False)
+                    self.tap_confirm_1()  # 点击每日首次确认
+                    self.wait_for_image(get_path("daliy_confirm_button.png"), timeout=1, confidence=conf_val, do_tap=True)
+                    self.count += 1
+                time.sleep(1)
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
 
-            self.wait_for_image(get_path("prepare.png"), timeout=3, confidence=conf_val, do_tap=True)
-            self.wait_for_image(get_path("finish_mark_300.png"), timeout=180, confidence=conf_val, do_tap=True)
+            
+            self.wait_for_image(get_path("finish_mark_300.png"), timeout=120, confidence=conf_val, do_tap=True)
             time.sleep(2)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
             self.log("第九次位置战斗结束，结界突破完成")
@@ -631,7 +626,7 @@ class GameBotGUI:
                 self.adb_command(f"shell input tap {x} {y}")
                 time.sleep(2)
 
-                if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=0.45, do_tap=True):
+                if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=0.8, do_tap=True):
                     fail_count += 1
                     self.log(f"第 {idx} 个位置检测到 attack 失败，准备切换到下一个位置")
                     break
@@ -674,7 +669,6 @@ class GameBotGUI:
 
         self.log("阴阳寮突破本轮完成")
         time.sleep(1)
-        self.swipe_up_full()
         return True
 
     def combat_option_8_logic(self):
@@ -712,21 +706,31 @@ class GameBotGUI:
     def hard_28_cycle(self):
         self.log("开始一轮困难二十八流程：button_28 -> search -> 小怪5次 -> boss -> takara/search/button_28")
 
-        # 首先扫描 button_28，5s 没扫描到就跳过到 search 扫描
-        button_found = self.wait_for_image(get_path("button_28.png"), timeout=5, confidence=0.6, do_tap=True)
+        # 首先扫描 button_28，3s 没扫描到就跳过到 search 扫描
+        button_found = self.wait_for_image(get_path("button_28.png"), timeout=3, confidence=0.9, do_tap=True)
         if not button_found:
-            self.log("5s 内未找到 button_28.png，转到 search 扫描")
+            if self.wait_for_image(get_path("break.png"), timeout=1, confidence=0.7, do_tap=False):
+                self.log("3s 内未找到 button_28.png，但检测到 break.png，尝试寻找button_28.png并点击")
+                for attempt in range(5):
+                    self.swipe_up_full()
+                    self.log(f"第 {attempt + 1} 次上滑刷新后尝试寻找 button_28.png")
+                    if self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.85, do_tap=True):
+                        self.log("成功找到 button_28.png 并点击")
+                        button_found = True
+                        break
+            self.log("3s 内未找到 button_28.png，转到 search 扫描")
+
 
         # search 逻辑：扫描到直接进入，否则本轮结束
-        if not self.wait_for_image(get_path("search.png"), timeout=10, confidence=0.6, do_tap=True):
+        if not self.wait_for_image(get_path("search.png"), timeout=5, confidence=0.6, do_tap=True):
             self.log("未找到 search.png，结束本轮困难二十八流程")
             return False
-
+        
         # 进行5次小怪战斗
         fight_count = 0
         swipe_retries = 0
         while self.is_running and fight_count < 5:
-            if self.wait_for_image(get_path("attack_28.png"), timeout=4, confidence=0.6, do_tap=True):
+            if self.wait_for_image(get_path("attack_28.png"), timeout=3, confidence=0.6, do_tap=True):
                 swipe_retries = 0
                 if self.process_finish_mark_300(timeout=20):
                     fight_count += 1
@@ -738,7 +742,6 @@ class GameBotGUI:
                     self.log("结界突破卷已达到27，停止困难28循环")
                     return True
                 continue
-
             # 未检测到 attack_28，进行左滑刷新；最多重试两次，仍未找到则结束小怪阶段
             swipe_retries += 1
             self.log(f"第 {swipe_retries} 次未检测到 attack_28，执行左滑刷新")
@@ -748,7 +751,7 @@ class GameBotGUI:
                 break
 
         # boss 战
-        if self.wait_for_image(get_path("boss.png"), timeout=5, confidence=0.6, do_tap=True):
+        if self.wait_for_image(get_path("boss.png"), timeout=3, confidence=0.6, do_tap=True):
             self.process_finish_mark_300(timeout=20)
             time.sleep(3)
             if self.break_roll_count >= 27:
@@ -756,25 +759,24 @@ class GameBotGUI:
                 return True
 
         # takara/search/button_28 回退机制
-        if self.wait_for_image(get_path("takara.png"), timeout=5, confidence=0.8, do_tap=False):
+        if self.wait_for_image(get_path("takara.png"), timeout=2, confidence=0.8, do_tap=False):
             self.log("找到 takara.png，继续回到 search 流程")
             self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.6, do_tap=True)
             time.sleep(1)
             self.tap_confirm()
             return True
-        if self.wait_for_image(get_path("search.png"), timeout=5, confidence=0.6, do_tap=False):
-            self.log("5s内未找到 takara，找到 search.png，继续 search 流程")
+        if self.wait_for_image(get_path("search.png"), timeout=2, confidence=0.6, do_tap=False):
+            self.log("2s内未找到 takara，找到 search.png，继续 search 流程")
             return True
-        if self.wait_for_image(get_path("button_28.png"), timeout=5, confidence=0.6, do_tap=True):
-            self.log("5s内未找到 takara/search，找到 button_28.png，继续 button_28 流程")
+        if self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.6, do_tap=True):
+            self.log("2s内未找到 takara/search，找到 button_28.png，继续 button_28 流程")
             return True
 
         self.log("takara/search/button_28 均未找到，结束困难二十八流程")
-        self.log("找到 takara.png，继续回到 search 流程")
         self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.6, do_tap=True)
         time.sleep(1)
         self.tap_confirm()
-        return False
+        return True
 
     def hard_28_logic(self):
         while self.is_running:
@@ -827,12 +829,18 @@ class GameBotGUI:
                 continue
 
             self.log("结界突破卷达标(>=27)，执行返回并确认")
-            self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.7, do_tap=True)
-            time.sleep(1)
-            self.tap_confirm()
-            time.sleep(1)
-            self.wait_for_image(get_path("back_button.png"), timeout=3, confidence=0.7, do_tap=True)
-            time.sleep(1)
+            if not self.wait_for_image(get_path("break.png"), timeout=2, confidence=0.7, do_tap=False):
+               if not self.wait_for_image(get_path("search.png"), timeout=2, confidence=0.7, do_tap=False):
+                  self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.7, do_tap=True)
+                  time.sleep(1)
+                  self.tap_confirm()
+                  time.sleep(1)
+               if not self.wait_for_image(get_path("break.png"), timeout=2, confidence=0.7, do_tap=False):
+                  self.wait_for_image(get_path("back_button.png"), timeout=3, confidence=0.7, do_tap=True)
+                  time.sleep(1)
+
+            self.count += 1
+            self.count_label.config(text=f"已成功获取一轮突破卷: {self.count} 轮")
 
             # 结界突破模式循环3次（3次9格=27次战斗）
             for i in range(3):
@@ -877,7 +885,7 @@ class GameBotGUI:
                 while self.is_running:
                     if self.check_total_time_limit():
                         return False
-                    if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
+                    if self.wait_for_image(current_start_img, timeout=2, confidence=conf_val, do_tap=False):
                         self.count += 1
                         self.count_label.config(text=f"已成功运行: {self.count} 轮")
                         self.log(f"第 {self.count} 轮结束，回到主界面")
@@ -934,7 +942,7 @@ class GameBotGUI:
         while self.is_running:
             if self.check_total_time_limit():
                 return False
-            finish_imgs = [get_path("finish_mark.png"), get_path("finish_mark_sp.png")]
+            finish_imgs = [get_path("finish_mark.png"), get_path("finish_mark_sp.png"), get_path("finish_mark_sp_2.png")]
             finish_detected = False
             matched_finish_img = None
             finish_start_t = time.time()
@@ -1266,7 +1274,7 @@ class GameBotGUI:
         while self.is_running:
             if self.check_total_time_limit():
                 return False
-            finish_imgs = [get_path("finish_mark.png"), get_path("finish_mark_sp.png")]
+            finish_imgs = [get_path("finish_mark.png"), get_path("finish_mark_sp.png"), get_path("finish_mark_sp_2.png")]
             finish_detected = False
             matched_finish_img = None
             finish_start_t = time.time()
