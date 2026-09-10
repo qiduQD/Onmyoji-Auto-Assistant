@@ -870,10 +870,11 @@ class GameBotGUI:
 
             self.log("结界突破卷达标(>=27)，执行返回并确认")
             if not self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.7, do_tap=False):
-               self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.7, do_tap=True)
-               time.sleep(1)
-               self.tap_confirm()
-               time.sleep(1)
+               if not self.wait_for_image(get_path("search.png"), timeout=2, confidence=0.7, do_tap=False):
+                  self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.7, do_tap=True)
+                  time.sleep(1)
+                  self.tap_confirm()
+                  time.sleep(1)
                if not self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.7, do_tap=False):
                   self.wait_for_image(get_path("back_button.png"), timeout=3, confidence=0.7, do_tap=True)
                   time.sleep(1)
