@@ -91,7 +91,7 @@ class GameBotGUI:
         self.root = root
         # 初始化图片缓存字典
         self.image_cache = {}
-        self.root.title("痒痒鼠小助手 v3.0,整体优化完成")
+        self.root.title("痒痒鼠小助手 v4.0,优化点触策略，增添挂机休息间断")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
             if platform.system() == "Windows":
@@ -389,33 +389,41 @@ class GameBotGUI:
         return subprocess.run(f'"{self.adb_path_entry.get()}" -s {self.device_var.get()} {cmd}', shell=True,
                               capture_output=True)
 
+    def swipe_tap(self, tx, ty):
+        end_x = tx + self.rng.randint(-2, 2)
+        end_y = ty + self.rng.randint(-2, 2)
+        duration = max(60, min(int(self.rng.gauss(120, 25)), 250))
+        time.sleep(self.rng.uniform(0.03, 0.10))
+        self.adb_command(f"shell input swipe {tx} {ty} {end_x} {end_y} {duration}")
+        time.sleep(self.rng.uniform(0.10, 0.25))
+
     def tap_confirm(self):
         # 为确认按钮提供替代点击：在指定区域随机点击
         x = self.rng.randint(895, 1045)
         y = self.rng.randint(480, 520)
         self.log(f" -> [confirm] 随机点击: ({x}, {y})")
-        self.adb_command(f"shell input tap {x} {y}")
+        self.swipe_tap(x, y)
 
     def tap_confirm_2(self):
         # 为确认按钮提供替代点击：在指定区域随机点击
         x = self.rng.randint(880, 975)
         y = self.rng.randint(505, 545)
         self.log(f" -> [confirm] 随机点击: ({x}, {y})")
-        self.adb_command(f"shell input tap {x} {y}")
+        self.swipe_tap(x, y)
     
     def tap_confirm_1(self):
         # 为确认按钮提供替代点击：在指定区域随机点击
         x = self.rng.randint(680, 700)
         y = self.rng.randint(433, 465)
         self.log(f" -> [confirm] 随机点击: ({x}, {y})")
-        self.adb_command(f"shell input tap {x} {y}")
+        self.swipe_tap(x, y)
     
     def tap_cancel(self):
         # 为取消按钮提供替代点击：在指定区域随机点击
         x = self.rng.randint(30, 60)
         y = self.rng.randint(30, 60)
         self.log(f" -> [cancel] 随机点击: ({x}, {y})")
-        self.adb_command(f"shell input tap {x} {y}")
+        self.swipe_tap(x, y)
 
     def random_in_offset(self, base, offset=30):
         return self.rng.randint(base - offset, base + offset)
@@ -453,7 +461,45 @@ class GameBotGUI:
         tx = self.rng.randint(460, 630)
         ty = self.rng.randint(800, 900)
         self.log(f" -> [清理中] 随机点击: ({tx}, {ty})")
-        self.adb_command(f"shell input tap {tx} {ty}")
+        self.swipe_tap(tx, ty)
+
+    def swipe_bezier(self, start_x, start_y, end_x, end_y, duration=300, segments=10):
+        control_offset = self.rng.randint(-40, 40)
+        delta_x = end_x - start_x
+        delta_y = end_y - start_y
+        control_1 = (
+            int(start_x + delta_x * 0.33 - delta_y * control_offset / max(abs(delta_x) + abs(delta_y), 1)),
+            int(start_y + delta_y * 0.33 + delta_x * control_offset / max(abs(delta_x) + abs(delta_y), 1))
+        )
+        control_2 = (
+            int(start_x + delta_x * 0.67 - delta_y * control_offset / max(abs(delta_x) + abs(delta_y), 1)),
+            int(start_y + delta_y * 0.67 + delta_x * control_offset / max(abs(delta_x) + abs(delta_y), 1))
+        )
+
+        points = []
+        for index in range(segments + 1):
+            t = index / segments
+            inverse_t = 1 - t
+            x = (
+                inverse_t ** 3 * start_x
+                + 3 * inverse_t ** 2 * t * control_1[0]
+                + 3 * inverse_t * t ** 2 * control_2[0]
+                + t ** 3 * end_x
+            )
+            y = (
+                inverse_t ** 3 * start_y
+                + 3 * inverse_t ** 2 * t * control_1[1]
+                + 3 * inverse_t * t ** 2 * control_2[1]
+                + t ** 3 * end_y
+            )
+            points.append((round(x), round(y)))
+
+        segment_duration = max(1, duration // segments)
+        for (segment_start_x, segment_start_y), (segment_end_x, segment_end_y) in zip(points, points[1:]):
+            self.adb_command(
+                f"shell input swipe {segment_start_x} {segment_start_y} "
+                f"{segment_end_x} {segment_end_y} {segment_duration}"
+            )
 
     def swipe_left_full(self):
         # 屏幕从右向左滑动，用于更大范围刷新列表或页面
@@ -461,7 +507,7 @@ class GameBotGUI:
         x2 = int(self.screen_w * 0.15)
         y = int(self.screen_h * 0.5)
         self.log(f" -> [刷新] 左滑屏幕: ({x1},{y}) -> ({x2},{y})")
-        self.adb_command(f"shell input swipe {x1} {y} {x2} {y} 300")
+        self.swipe_bezier(x1, y, x2, y)
         time.sleep(0.8)
 
     def swipe_up_full(self):
@@ -470,7 +516,7 @@ class GameBotGUI:
         y1 = int(200)
         y2 = int(635)
         self.log(f" -> [刷新] 上滑屏幕: ({x},{y2}) -> ({x},{y1})")
-        self.adb_command(f"shell input swipe {x} {y2} {x} {y1} 300")
+        self.swipe_bezier(x, y2, x, y1)
         time.sleep(0.8)
 
     def find_and_tap(self, template_path, confidence=0.7, do_tap=True, screen=None):
@@ -501,12 +547,35 @@ class GameBotGUI:
         
         if max_val >= confidence:
             if do_tap:
-                mw, mh = int(w * 0.1), int(h * 0.1)
-                tx = self.rng.randint(max_loc[0] + mw, max_loc[0] + w - mw)
-                ty = self.rng.randint(max_loc[1] + mh, max_loc[1] + h - mh)
-                self.adb_command(f"shell input tap {tx} {ty}")
-                # 使用 os.path.basename 只显示文件名，不显示长路径
-                self.log(f"命中: {os.path.basename(template_path)} ({max_val:.2f})")
+                # 1. 计算模板中心坐标
+                center_x = max_loc[0] + w / 2.0
+                center_y = max_loc[1] + h / 2.0
+                
+                # 2. 高斯分布采样（以中心为偏重，标准差取宽高的 1/6）
+                sigma_x, sigma_y = w / 6.0, h / 6.0
+                tx = int(self.rng.gauss(center_x, sigma_x))
+                ty = int(self.rng.gauss(center_y, sigma_y))
+                
+                # 3. 边界安全裁切（限制在中心 80% 区域内，防止点击落在边缘）
+                margin_x, margin_y = w * 0.1, h * 0.1
+                tx = max(int(max_loc[0] + margin_x), min(tx, int(max_loc[0] + w - margin_x)))
+                ty = max(int(max_loc[1] + margin_y), min(ty, int(max_loc[1] + h - margin_y)))
+                
+                # 4. 拟人化参数：随机微抖动与按压时长 (80ms - 200ms)
+                end_x = tx + self.rng.randint(-2, 2)
+                end_y = ty + self.rng.randint(-2, 2)
+                duration = max(60, min(int(self.rng.gauss(120, 25)), 250))
+                
+                # 5. 点击前随机反应延迟 (30ms - 100ms)
+                time.sleep(self.rng.uniform(0.03, 0.10))
+                
+                # 6. 用原地/微滑 swipe 替代 tap 以模拟真实触摸按压
+                self.adb_command(f"shell input swipe {tx} {ty} {end_x} {end_y} {duration}")
+                
+                # 7. 点击后视线确认停顿 (100ms - 250ms)
+                time.sleep(self.rng.uniform(0.10, 0.25))
+                
+                self.log(f"命中: {os.path.basename(template_path)} ({max_val:.2f}) at ({tx}, {ty})")
             return True
             
         return False
@@ -619,7 +688,7 @@ class GameBotGUI:
                 return False
 
             self.log(f"点击第 {idx} 个位置: ({x},{y})")
-            self.adb_command(f"shell input tap {x} {y}")
+            self.swipe_tap(x, y)
             time.sleep(1.2)
 
             # 等待出现 attack 按钮并进入战斗
@@ -700,7 +769,7 @@ class GameBotGUI:
                 x = self.random_in_offset(base_x, 30)
                 y = self.random_in_offset(base_y, 30)
                 self.log(f"寮突模式第 {idx} 个位置继续 attack: ({x},{y})")
-                self.adb_command(f"shell input tap {x} {y}")
+                self.swipe_tap(x, y)
                 time.sleep(2)
 
                 if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=0.8, do_tap=True):
@@ -791,7 +860,7 @@ class GameBotGUI:
                 for attempt in range(5):
                     self.swipe_up_full()
                     self.log(f"第 {attempt + 1} 次上滑刷新后尝试寻找 button_28.png")
-                    if self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.85, do_tap=True):
+                    if self.wait_for_image(get_path("button_28.png"), timeout=2, confidence=0.88, do_tap=True):
                         self.log("成功找到 button_28.png 并点击")
                         button_found = True
                         break
