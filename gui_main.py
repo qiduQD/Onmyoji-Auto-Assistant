@@ -143,9 +143,9 @@ class GameBotGUI:
         self.adb_path_entry.pack()
         # 关卡名称与对应图片文件的映射
         self.level_map = {
-            "周年庆999": {
-                "start": get_path("start_button_300.png"),
-                "end": get_path("finish_mark_999.png")
+            "通用": {
+                "start": get_path("start_button.png"),
+                "end": get_path("finish_mark_300.png")
             },
             "英杰等普通耗3体副本": {
                 "start": get_path("start_button_3.png"),
@@ -200,13 +200,6 @@ class GameBotGUI:
         self.level_menu.grid(row=0, column=1, padx=5)
 
         self.rest_event_enabled = tk.BooleanVar(value=True)
-        self.rest_event_check = tk.Checkbutton(
-            level_frame,
-            text="999副本休息事件",
-            variable=self.rest_event_enabled
-        )
-        self.rest_event_check.grid(row=0, column=2, padx=5)
-
         # 3. 阈值设置
         tk.Label(root, text="识别阈值 (推荐 0.7-0.8):").pack(pady=2)
         self.conf_slider = tk.Scale(root, from_=0.1, to=1.0, resolution=0.05, orient=tk.HORIZONTAL, length=200)
@@ -512,7 +505,7 @@ class GameBotGUI:
 
     def swipe_up_full(self):
         # 每轮结束后上滑刷新目标列表
-        x = self.rng.randint(1332, 1554)
+        x = self.rng.randint(1332, 1438)
         y1 = int(200)
         y2 = int(635)
         self.log(f" -> [刷新] 上滑屏幕: ({x},{y2}) -> ({x},{y1})")
@@ -580,27 +573,6 @@ class GameBotGUI:
             
         return False
 
-    def accept_task_if_present(self, screen=None):
-        """检测并点击悬赏任务弹窗，返回是否成功点击。"""
-        task_accept_img = get_path("task-accept.png")
-        try:
-            accepted = self.find_and_tap(
-                task_accept_img,
-                confidence=0.6,
-                do_tap=True,
-                screen=screen
-            )
-        except Exception as error:
-            self.log(f"检测 task-accept.png 失败: {error}")
-            return False
-
-        if accepted:
-            self.log("【系统提示】触发悬赏任务！已自动接受。")
-            sys.stdout.write('\a')
-            sys.stdout.flush()
-            time.sleep(0.6)
-        return accepted
-
     def wait_for_image(self, template_path, timeout=60, confidence=0.5, do_tap=False, interval=1.0):
         start_t = time.time()
         while self.is_running and time.time() - start_t < timeout:
@@ -611,18 +583,28 @@ class GameBotGUI:
             if current_screen is None:
                 time.sleep(interval)
                 continue
-            # 全局检测：优先扫描并点击任务接受弹窗，点击后重新截图
-            if self.accept_task_if_present(screen=current_screen):
-                continue
+           # 全局检测：优先扫描并点击任务接受弹窗（task-accept.png），若存在则点击并继续等待目标
+            try:
+                task_accept_img = get_path("task-accept.png")
+                # 使用较高置信度，若命中则直接点击（find_and_tap 会在命中时记录日志）
+                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
+                    time.sleep(0.6)
+                    try:
+                        # 在主线程弹出提示，避免在工作线程直接调用 tkinter
+                        self.root.after(0, lambda: messagebox.showinfo("提示", "有接取悬赏任务，记得完成！"))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
             # 检测目标图片，同样传入 current_screen
             if self.find_and_tap(template_path, confidence=confidence, do_tap=False, screen=current_screen):
                 if do_tap:
-                    time.sleep(0.5) 
+                    time.sleep(0.3) 
                     # 此时画面可能变了，再次检测时让它内部重新截图确认
                     if not self.find_and_tap(template_path, confidence=confidence, do_tap=True):
-                        self.log(f"警告：目标 {os.path.basename(template_path)} 在点击时未找到")
-                        self.full_screen_random_tap()
+                        self.log(f"警告：目标 {os.path.basename(template_path)} 在点击时未找到，不执行兜底随机点击")
+                        return False
                 return True
             
             time.sleep(interval)
@@ -763,7 +745,7 @@ class GameBotGUI:
             
 
             fail_count = 0
-            fail_img = get_path("restart.png")
+            fail_img = get_path("fail.png")
             finish_img = get_path("finish_mark_300.png")
             while self.is_running:
                 x = self.random_in_offset(base_x, 30)
@@ -773,9 +755,8 @@ class GameBotGUI:
                 time.sleep(2)
 
                 if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=0.8, do_tap=True):
-                    fail_count += 1
-                    self.log(f"第 {idx} 个位置检测到 attack 失败，准备切换到下一个位置")
-                    break
+                    self.log(f"第 {idx} 个位置未确认 attack，停止本轮，避免在未知页面点击下一个位置")
+                    return False
 
                 # 同时轮询 fail 与 finish：finish 继续当前坐标，fail 或 finish 超时则切换坐标
                 fight_timeout = 180
@@ -784,7 +765,8 @@ class GameBotGUI:
                 while self.is_running and time.time() - start_t < fight_timeout:
                     if self.find_and_tap(fail_img, confidence=0.7, do_tap=False):
                         time.sleep(0.5)
-                        self.full_screen_random_tap()  # 检测到 fail 就随机点击清理一下，增加下一轮检测的成功率
+                        # 已经确认 restart 图标存在时，直接点击该模板，避免随机点击误触其他页面控件。
+                        self.find_and_tap(fail_img, confidence=0.7, do_tap=True)
                         fail_count += 1
                         self.log(f"第 {idx} 个位置失败，准备切换到下一个位置")
                         time.sleep(2)
@@ -792,9 +774,12 @@ class GameBotGUI:
 
                     if self.find_and_tap(finish_img, confidence=0.7, do_tap=False):
                         time.sleep(0.5)
-                        self.find_and_tap(finish_img, confidence=0.7, do_tap=True)
-                        finish_detected = True
-                        time.sleep(1.4)
+                        if self.find_and_tap(finish_img, confidence=0.7, do_tap=True):
+                            finish_detected = True
+                            time.sleep(1.4)
+                            break
+                        self.log(f"第 {idx} 个位置检测到结算标记后未能确认点击，按失败处理")
+                        fail_count += 1
                         break
 
                     time.sleep(2)
@@ -1031,7 +1016,7 @@ class GameBotGUI:
                 while self.is_running:
                     if self.check_total_time_limit():
                         return False
-                    if self.wait_for_image(current_start_img, timeout=2, confidence=conf_val, do_tap=False):
+                    if self.wait_for_image(current_start_img, timeout=3, confidence=conf_val, do_tap=False):
                         self.count += 1
                         self.count_label.config(text=f"已成功运行: {self.count} 轮")
                         self.log(f"第 {self.count} 轮结束，回到主界面")
@@ -1042,24 +1027,7 @@ class GameBotGUI:
                     time.sleep(1)
 
                 return False
-
-            # 超_时/挂机处理
-            if time.time() - start_time > 90:
-                while self.is_running:
-                    if self.check_total_time_limit():
-                        return False
-                    if self.find_and_tap(current_start_img, confidence=conf_val, do_tap=False):
-                        self.count += 1
-                        self.count_label.config(text=f"已成功运行: {self.count} 轮")
-                        self.log(f"第 {self.count} 轮超时检测到开始按钮，视为完成")
-                        return True
-                    else:
-                        self.log("超时检测未找到开始按钮，执行随机点击清理")
-                        self.full_screen_random_tap()
-                        time.sleep(1)  # 每次乱点后重置一点时间，避免疯狂点击
-
-                
-            time.sleep(1)
+           
 
         return False
     
@@ -1597,24 +1565,6 @@ class GameBotGUI:
             self.log(f"截图出错: {e}")
             messagebox.showerror("错误", f"截图出错: {e}")
 
-    def rest_event(self):
-        """休息期间处理999活动界面，并返回副本挑战界面。"""
-        conf_val = self.conf_slider.get()
-        self.log("休息事件开始：尝试处理999活动界面")
-
-        self.wait_for_image(get_path("999_back.png"), timeout=10, confidence=conf_val, do_tap=True)
-        self.wait_for_image(get_path("activate_button.png"), timeout=10, confidence=conf_val, do_tap=True)
-        if self.wait_for_image(get_path("999_takara.png"), timeout=5, confidence=conf_val, do_tap=True):
-            self.wait_for_image(get_path("open_takara.png"), timeout=10, confidence=conf_val, do_tap=True)
-            self.wait_for_image(get_path("takara_finish.png"), timeout=10, confidence=conf_val, do_tap=False)
-            self.full_screen_random_tap()
-            self.wait_for_image(get_path("takara_cancel.png"), timeout=10, confidence=conf_val, do_tap=True)
-        else:
-            self.log("未检测到999_takara.png，直接返回副本挑战界面")
-
-        self.wait_for_image(get_path("999_button.png"), timeout=10, confidence=conf_val, do_tap=True)
-        self.log("休息事件结束，已返回副本挑战界面")
-
     def rest_event_2(self):
         """休息期间进入另一种界面，等待后返回副本挑战界面。"""
         conf_val = self.conf_slider.get()
@@ -1656,10 +1606,7 @@ class GameBotGUI:
                 rest_seconds = self.rng.uniform(30, 90)
                 self.log(f"达到随机休息时间，暂停 {rest_seconds / 60:.1f} 分钟")
                 # 调用休息事件
-                if selected_level_name == "周年庆999" and self.rest_event_enabled.get():
-                    rest_event = self.rng.choice((self.rest_event, self.rest_event_2))
-                else:
-                    rest_event = self.rest_event_2
+                rest_event = self.rest_event_2
                 rest_event()
                 rest_end_time = time.time() + rest_seconds
                 while self.is_running and time.time() < rest_end_time:
