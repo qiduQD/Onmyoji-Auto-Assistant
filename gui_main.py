@@ -854,8 +854,8 @@ class GameBotGUI:
 
         # search 逻辑：扫描到直接进入，否则本轮结束
         if not self.wait_for_image(get_path("search.png"), timeout=5, confidence=0.6, do_tap=True):
-            self.log("未找到 search.png，结束本轮困难二十八流程")
-            return False
+            self.log("未找到 search.png，尝试直接进入战斗扫描")
+            
         
         # 进行5次小怪战斗
         fight_count = 0
@@ -877,7 +877,7 @@ class GameBotGUI:
             swipe_retries += 1
             self.log(f"第 {swipe_retries} 次未检测到 attack_28，执行左滑刷新")
             self.swipe_left_full()
-            if swipe_retries >= 2:
+            if swipe_retries > 2:
                 self.log("连续两次刷新未找到 attack_28，结束小怪战斗流程")
                 break
 
@@ -892,9 +892,9 @@ class GameBotGUI:
         # takara/search/button_28 回退机制
         if self.wait_for_image(get_path("takara.png"), timeout=2, confidence=0.8, do_tap=False):
             self.log("找到 takara.png，继续回到 search 流程")
-            self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.6, do_tap=True)
-            time.sleep(1)
-            self.tap_confirm()
+            if self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.8, do_tap=True):
+                time.sleep(1)
+                self.tap_confirm()
             return True
         if self.wait_for_image(get_path("search.png"), timeout=2, confidence=0.6, do_tap=False):
             self.log("2s内未找到 takara，找到 search.png，继续 search 流程")
@@ -904,9 +904,9 @@ class GameBotGUI:
             return True
 
         self.log("takara/search/button_28 均未找到，结束困难二十八流程")
-        self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.6, do_tap=True)
-        time.sleep(1)
-        self.tap_confirm()
+        if self.wait_for_image(get_path("back_button.png"), timeout=10, confidence=0.8, do_tap=True):
+            time.sleep(1)
+            self.tap_confirm()
         return True
 
     def hard_28_logic(self):
