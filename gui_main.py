@@ -175,8 +175,8 @@ class GameBotGUI:
         button = tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
                            activebackground=bg, activeforeground=fg,
                            relief=tk.FLAT, bd=0, cursor="hand2",
-                           font=("微软雅黑", 10, "bold"), width=width,
-                           padx=8, pady=8)
+                           font=("微软雅黑", 9, "bold"), width=width,
+                           padx=5, pady=5)
         button.grid(row=row, column=column, columnspan=colspan,
                     padx=5, pady=5, sticky="ew")
         return button
@@ -334,6 +334,27 @@ class GameBotGUI:
         limits.columnconfigure(0, weight=1)
         limits.columnconfigure(2, weight=1)
 
+        self.btn_frame = tk.Frame(settings, bg="#FFFFFF")
+        self.btn_frame.pack(fill=tk.X, padx=13, pady=(0, 13))
+        self.combat_btn = self._button(self.btn_frame, "结界突破", self.start_combat_option,
+                                       bg="#0A84FF", width=12, row=0, column=0)
+        self.hard28_btn = self._button(self.btn_frame, "困难二十八", self.start_hard_28,
+                                       bg="#5E5CE6", width=12, row=0, column=1)
+        self.draw_roll_btn = self._button(self.btn_frame, "绘卷模式", self.start_draw_roll,
+                                          bg="#AF52DE", width=12, row=0, column=2)
+        self.draw_roll2_btn = self._button(self.btn_frame, "绘卷模式 2", self.start_draw_roll2,
+                                           bg="#AF52DE", width=12, row=1, column=0)
+        self.combat8_btn = self._button(self.btn_frame, "阴阳寮突破", self.start_combat_option_8,
+                                        bg="#5856D6", width=12, row=1, column=1)
+        self.arena_btn = self._button(self.btn_frame, "斗技", self.start_arena,
+                                      bg="#FF2D55", width=12, row=1, column=2)
+        self.super_ghost_btn = self._button(
+            self.btn_frame, "超鬼王低星", self.start_super_ghost,
+            bg="#FF375F", width=12, row=2, column=0, colspan=3)
+        self.btn_frame.columnconfigure(0, weight=1)
+        self.btn_frame.columnconfigure(1, weight=1)
+        self.btn_frame.columnconfigure(2, weight=1)
+
         monitor = self._card(right, "运行监控", "LIVE STATUS")
         stats = tk.Frame(monitor, bg="#FFFFFF")
         stats.pack(fill=tk.X, padx=13, pady=(0, 13))
@@ -343,31 +364,19 @@ class GameBotGUI:
         for label in (self.count_label, self.roll_label, self.menpiao_label):
             label.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5, pady=12)
 
-        self.btn_frame = tk.Frame(monitor, bg="#FFFFFF")
-        self.btn_frame.pack(fill=tk.X, padx=13, pady=(0, 13))
-        self.start_btn = self._button(self.btn_frame, "▶  开始挂机", self.start_task,
+        action_frame = tk.Frame(monitor, bg="#FFFFFF")
+        action_frame.pack(fill=tk.X, padx=13, pady=(0, 13))
+        self.start_btn = self._button(action_frame, "▶  开始挂机", self.start_task,
                                       bg="#34C759", fg="#FFFFFF", width=12, row=0, column=0)
-        self.stop_btn = self._button(self.btn_frame, "■  停止运行", self.stop_task,
+        self.stop_btn = self._button(action_frame, "■  停止运行", self.stop_task,
                                      bg="#FF3B30", fg="#FFFFFF", width=12, row=0, column=1)
         self.stop_btn.config(state=tk.DISABLED)
-        self.combat_btn = self._button(self.btn_frame, "结界突破", self.start_combat_option,
-                                       bg="#0A84FF", width=12, row=1, column=0)
-        self.hard28_btn = self._button(self.btn_frame, "困难二十八", self.start_hard_28,
-                                       bg="#5E5CE6", width=12, row=1, column=1)
-        self.draw_roll_btn = self._button(self.btn_frame, "绘卷模式", self.start_draw_roll,
-                                          bg="#AF52DE", width=2, row=2, column=0)
-        self.draw_roll2_btn = self._button(self.btn_frame, "绘卷模式 2", self.start_draw_roll2,
-                                           bg="#AF52DE", width=2, row=2, column=1)
-        self.combat8_btn = self._button(self.btn_frame, "阴阳寮突破", self.start_combat_option_8,
-                                        bg="#5856D6", width=2, row=3, column=0)
-        self.arena_btn = self._button(self.btn_frame, "斗技", self.start_arena,
-                                      bg="#FF2D55", width=2, row=3, column=1)
-        self.zudui_btn = self._button(self.btn_frame, "组队", self.start_zudui,
-                                      bg="#FF9500", width=2, row=4, column=0)
-        self.bezudui_btn = self._button(self.btn_frame, "被组队", self.start_bezudui,
-                                        bg="#8E8E93", width=2, row=4, column=1)
-        self.btn_frame.columnconfigure(0, weight=1)
-        self.btn_frame.columnconfigure(1, weight=1)
+        action_frame.columnconfigure(0, weight=1)
+        action_frame.columnconfigure(1, weight=1)
+        self.zudui_btn = self._button(action_frame, "组队", self.start_zudui,
+                                      bg="#FF9500", width=12, row=1, column=0)
+        self.bezudui_btn = self._button(action_frame, "被组队", self.start_bezudui,
+                                        bg="#8E8E93", width=12, row=1, column=1)
 
         log_card = tk.Frame(right, bg="#FFFFFF", highlightbackground="#E5E5EA",
                             highlightthickness=1, bd=0)
@@ -1264,6 +1273,107 @@ class GameBotGUI:
             time.sleep(1)
 
         return False
+
+    def run_super_ghost_low_star(self, conf_val):
+        """执行一轮超鬼王低星流程：发现鬼王、准备战斗、等待结算。"""
+        if not self.is_running:
+            return False
+
+        self.log("等待超鬼王入口...")
+        if not self.wait_for_image(
+                get_path("find.png"), timeout=10,
+                confidence=conf_val, do_tap=True):
+            self.log("未找到 find.png，检测是否已经召唤鬼王")
+
+        if not self.wait_for_image(
+                get_path("chao.png"), timeout=30,
+                confidence=conf_val, do_tap=True):
+            self.log("未找到 chao.png，超鬼王本轮未开始")
+            return False
+
+        self.log("已进入超鬼王挑战，等待准备按钮...")
+        if not self.wait_for_image(
+                get_path("prepare.png"), timeout=30,
+                confidence=conf_val, do_tap=True):
+            self.log("未找到 prepare.png，超鬼王本轮未开始")
+            return False
+
+        finish_imgs = [
+            get_path("finish_mark.png"),
+            get_path("finish_mark_sp.png"),
+            get_path("finish_mark_sp_2.png"),
+        ]
+        finish_detected = False
+        matched_finish_img = None
+        finish_start_t = time.time()
+        self.log("已进入战斗，等待超鬼王结算...")
+
+        while self.is_running and time.time() - finish_start_t < 200:
+            if self.check_total_time_limit():
+                return False
+
+            for finish_img in finish_imgs:
+                if self.find_and_tap(
+                        finish_img, confidence=conf_val, do_tap=False):
+                    matched_finish_img = finish_img
+                    finish_detected = True
+                    break
+
+            if finish_detected:
+                time.sleep(0.5)
+                self.find_and_tap(
+                    matched_finish_img, confidence=conf_val, do_tap=True)
+                break
+
+            time.sleep(1)
+
+        if not finish_detected:
+            self.log("超鬼王战斗等待结算超时")
+            return False
+
+        self.count += 1
+        self.count_label.config(text=f"{self.count} 轮")
+        self.log(f"超鬼王低星第 {self.count} 轮完成")
+        return True
+
+    def super_ghost_logic(self):
+        self.log("=== 超鬼王低星开始运行 ===")
+        conf_val = self.conf_slider.get()
+
+        try:
+            target_limit = int(self.limit_var.get())
+        except ValueError:
+            target_limit = 0
+            self.log("目标轮数格式错误，已默认为无限模式")
+
+        while self.is_running:
+            if self.check_total_time_limit():
+                break
+            if target_limit > 0 and self.count >= target_limit:
+                self.log(f"已达到目标轮数 {target_limit}，脚本自动停止")
+                break
+            if not self.run_super_ghost_low_star(conf_val):
+                break
+
+        self.log("超鬼王低星流程结束")
+        self.is_running = False
+        self.start_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+
+    def start_super_ghost(self):
+        if not self.device_var.get():
+            messagebox.showwarning("警告", "请先选择一个设备！")
+            return
+
+        self.update_screen_size()
+        self.count = 0
+        self.start_total_time_control()
+        self.count_label.config(text="0 轮")
+        self.is_running = True
+        self.start_btn.config(state=tk.DISABLED)
+        self.stop_btn.config(state=tk.NORMAL)
+        threading.Thread(
+            target=self.super_ghost_logic, daemon=True).start()
     
     def run_dungeon_random(self, selected_level_name, current_start_img, conf_val):
         """执行绘卷副本模式，成功完成后返回 True。"""
