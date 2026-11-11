@@ -87,11 +87,12 @@ def get_default_adb_candidates():
 
 
 class GameBotGUI:
-    def __init__(self, root):
+    def __init__(self, root, manager=None):
         self.root = root
+        self.manager = manager
         # 初始化图片缓存字典
         self.image_cache = {}
-        self.root.title("痒痒鼠小助手 v4.0,优化点触策略，增添挂机休息间断")
+        self.root.title("Onmyoji Auto · 阴阳师助手")
         # --- 设置窗口图标（兼容 Windows/macOS） ---
         try:
             if platform.system() == "Windows":
@@ -112,7 +113,9 @@ class GameBotGUI:
         except Exception as e:
             # 如果没有图标文件，程序也会正常运行，不会崩溃
             print(f"窗口图标加载失败: {e}")
-        self.root.geometry("800x750")
+        self.root.geometry("1180x820")
+        self.root.minsize(980, 680)
+        self.root.configure(bg="#F5F5F7")
         self.is_running = False
         self.devices = []
         self.rng = secrets.SystemRandom()
@@ -123,11 +126,95 @@ class GameBotGUI:
         self.time_limit_hit = False
 
         # --- UI 布局 ---
-        # 1. ADB 路径
-        tk.Label(root, text="ADB 路径:", font=("微软雅黑", 9)).pack(pady=2)
-        self.adb_path_entry = tk.Entry(root, width=60)
-        possible_adb_paths = get_default_adb_candidates()
+        self._setup_styles()
+        self._build_ui()
 
+        # 初始化刷新一次设备
+        self.refresh_devices()
+        self.root.protocol("WM_DELETE_WINDOW", self.close_window)
+
+    def close_window(self):
+        self.is_running = False
+        if self.manager:
+            if self.root is self.manager.root:
+                self.manager.close_all()
+                return
+            self.manager.close_instance(self)
+        else:
+            self.root.destroy()
+
+    def _setup_styles(self):
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure("Modern.TCombobox", fieldbackground="#FFFFFF",
+                        background="#FFFFFF", foreground="#1D1D1F",
+                        bordercolor="#D2D2D7", lightcolor="#D2D2D7",
+                        darkcolor="#D2D2D7", padding=7)
+        style.map("Modern.TCombobox", fieldbackground=[("readonly", "#FFFFFF")])
+
+    def _label(self, parent, text, size=10, color="#6E6E73", bold=False):
+        return tk.Label(parent, text=text, bg=parent.cget("bg"), fg=color,
+                        font=("微软雅黑", size, "bold" if bold else "normal"))
+
+    def _card(self, parent, title, subtitle=None):
+        card = tk.Frame(parent, bg="#FFFFFF", highlightbackground="#E5E5EA",
+                        highlightthickness=1, bd=0)
+        card.pack(fill=tk.X, pady=(0, 12))
+        heading = tk.Frame(card, bg="#FFFFFF")
+        heading.pack(fill=tk.X, padx=18, pady=(15, 8))
+        self._label(heading, title, 13, "#1D1D1F", True).pack(side=tk.LEFT)
+        if subtitle:
+            self._label(heading, subtitle, 9, "#86868B").pack(side=tk.RIGHT)
+        return card
+
+    def _button(self, parent, text, command, bg="#1D1D1F", fg="#FFFFFF",
+                width=12, row=0, column=0, colspan=1):
+        button = tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
+                           activebackground=bg, activeforeground=fg,
+                           relief=tk.FLAT, bd=0, cursor="hand2",
+                           font=("微软雅黑", 10, "bold"), width=width,
+                           padx=8, pady=8)
+        button.grid(row=row, column=column, columnspan=colspan,
+                    padx=5, pady=5, sticky="ew")
+        return button
+
+    def _build_ui(self):
+        root = self.root
+        shell = tk.Frame(root, bg="#F5F5F7")
+        shell.pack(fill=tk.BOTH, expand=True, padx=24, pady=20)
+
+        header = tk.Frame(shell, bg="#F5F5F7")
+        header.pack(fill=tk.X, pady=(0, 18))
+        title_box = tk.Frame(header, bg="#F5F5F7")
+        title_box.pack(side=tk.LEFT)
+        self._label(title_box, "阴阳师助手", 24, "#1D1D1F", True).pack(anchor="w")
+        self._label(title_box, "ONMYOJI AUTO  ·  视觉识别与 ADB 自动化", 9,
+                    "#86868B").pack(anchor="w", pady=(3, 0))
+        if self.manager:
+            new_instance = tk.Button(header, text="＋ 新建实例",
+                                     command=self.manager.open_instance,
+                                     bg="#0A84FF", fg="#FFFFFF",
+                                     activebackground="#0077ED",
+                                     activeforeground="#FFFFFF", relief=tk.FLAT,
+                                     bd=0, cursor="hand2",
+                                     font=("微软雅黑", 10, "bold"),
+                                     padx=14, pady=8)
+            new_instance.pack(side=tk.RIGHT, pady=4)
+
+        body = tk.Frame(shell, bg="#F5F5F7")
+        body.pack(fill=tk.BOTH, expand=True)
+        left = tk.Frame(body, bg="#F5F5F7", width=480)
+        left.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 16))
+        left.pack_propagate(False)
+        right = tk.Frame(body, bg="#F5F5F7")
+        right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        connection = self._card(left, "连接设备", "ADB CONNECTION")
+        self._label(connection, "ADB 路径", 9).pack(anchor="w", padx=18)
+        possible_adb_paths = get_default_adb_candidates()
         selected_adb = ""
         for p in possible_adb_paths:
             # 允许直接使用 PATH 中的 adb 命令
@@ -137,10 +224,31 @@ class GameBotGUI:
             if os.path.exists(p):
                 selected_adb = p
                 break
-
-        self.adb_path_entry = tk.Entry(root, width=60)
+        self.adb_path_entry = tk.Entry(connection, bg="#F5F5F7", fg="#1D1D1F",
+                                       relief=tk.FLAT, bd=0, font=("Consolas", 9))
         self.adb_path_entry.insert(0, selected_adb if selected_adb else "请手动指定 adb 路径")
-        self.adb_path_entry.pack()
+        self.adb_path_entry.pack(fill=tk.X, padx=18, pady=(4, 12), ipady=7)
+        device_row = tk.Frame(connection, bg="#FFFFFF")
+        device_row.pack(fill=tk.X, padx=13, pady=(0, 13))
+        self.device_var = tk.StringVar()
+        self.device_menu = ttk.Combobox(device_row, textvariable=self.device_var,
+                                        width=25, state="readonly",
+                                        style="Modern.TCombobox")
+        self.device_menu.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        self.refresh_btn = tk.Button(device_row, text="刷新",
+                                     command=self.refresh_devices,
+                                     bg="#E5E5EA", fg="#1D1D1F",
+                                     activebackground="#D2D2D7", relief=tk.FLAT,
+                                     bd=0, cursor="hand2", font=("微软雅黑", 9),
+                                     padx=8, pady=7)
+        self.refresh_btn.pack(side=tk.LEFT, padx=5)
+        self.screenshot_btn = tk.Button(
+            device_row, text="截图", command=self.screenshot_confirm,
+            bg="#E5E5EA", fg="#1D1D1F", activebackground="#D2D2D7",
+            relief=tk.FLAT, bd=0, cursor="hand2", font=("微软雅黑", 9),
+            padx=8, pady=7)
+        self.screenshot_btn.pack(side=tk.LEFT, padx=(0, 5))
+
         # 关卡名称与对应图片文件的映射
         self.level_map = {
             "通用": {
@@ -176,97 +284,103 @@ class GameBotGUI:
                 "end": get_path("finish_mark_300.png")
             },
         }
-
-        # 2. 设备选择区
-        device_frame = tk.Frame(root)
-        device_frame.pack(pady=10)
-        tk.Label(device_frame, text="选择设备:").grid(row=0, column=0)
-        self.device_var = tk.StringVar()
-        self.device_menu = ttk.Combobox(device_frame, textvariable=self.device_var, width=25, state="readonly")
-        self.device_menu.grid(row=0, column=1, padx=5)
-        tk.Button(device_frame, text="刷新设备列表", command=self.refresh_devices).grid(row=0, column=2)
-        self.screenshot_btn = tk.Button(device_frame, text="截图确认", command=self.screenshot_confirm, bg="#CFD8D9", fg="black", width=15)
-        self.screenshot_btn.grid(row=0, column=3, padx=10, pady=8)
-
-        #关卡选择区
-        level_frame = tk.Frame(root)
-        level_frame.pack(pady=10)
-        tk.Label(level_frame, text="选择目标关卡:").grid(row=0, column=0)
-
+        settings = self._card(left, "任务设置", "TASK SETTINGS")
+        level_frame = tk.Frame(settings, bg="#FFFFFF")
+        level_frame.pack(fill=tk.X, padx=18, pady=(0, 9))
+        self._label(level_frame, "目标关卡", 9).pack(anchor="w")
         self.level_var = tk.StringVar()
-        self.level_menu = ttk.Combobox(level_frame, textvariable=self.level_var, width=25, state="readonly")
+        self.level_menu = ttk.Combobox(level_frame, textvariable=self.level_var,
+                                       state="readonly", style="Modern.TCombobox")
         self.level_menu['values'] = list(self.level_map.keys())
-        self.level_menu.current(0)  # 默认选第一个
-        self.level_menu.grid(row=0, column=1, padx=5)
+        self.level_menu.current(0)
+        self.level_menu.pack(fill=tk.X, pady=(4, 0))
 
         self.rest_event_enabled = tk.BooleanVar(value=True)
-        # 3. 阈值设置
-        tk.Label(root, text="识别阈值 (推荐 0.7-0.8):").pack(pady=2)
-        self.conf_slider = tk.Scale(root, from_=0.1, to=1.0, resolution=0.05, orient=tk.HORIZONTAL, length=200)
-        self.conf_slider.set(0.8)  # 默认值 0.8
-        self.conf_slider.pack()
+        threshold = tk.Frame(settings, bg="#FFFFFF")
+        threshold.pack(fill=tk.X, padx=18, pady=(0, 8))
+        self._label(threshold, "识别阈值", 9).pack(anchor="w")
+        self.conf_slider = tk.Scale(threshold, from_=0.1, to=1.0, resolution=0.05,
+                                    orient=tk.HORIZONTAL, showvalue=True,
+                                    bg="#FFFFFF", fg="#1D1D1F", troughcolor="#D2D2D7",
+                                    activebackground="#0A84FF", highlightthickness=0,
+                                    length=270)
+        self.conf_slider.set(0.8)
+        self.conf_slider.pack(fill=tk.X, pady=(0, 3))
 
-        # 4. 控制按钮
-        self.btn_frame = tk.Frame(root)
-        self.btn_frame.pack(pady=15)
-        self.start_btn = tk.Button(self.btn_frame, text="开始挂机", command=self.start_task, bg="#4CAF50", fg="black",
-                                   width=15)
-        self.start_btn.grid(row=0, column=0, padx=10)
-        self.stop_btn = tk.Button(self.btn_frame, text="停止运行", command=self.stop_task, state=tk.DISABLED,
-                                  bg="#F44336", fg="black", width=15)
-        self.stop_btn.grid(row=0, column=1, padx=10)
-        self.combat_btn = tk.Button(self.btn_frame, text="结界突破", command=self.start_combat_option, bg="#2196F3", fg="black", width=15)
-        self.combat_btn.grid(row=0, column=2, padx=10)
-        self.hard28_btn = tk.Button(self.btn_frame, text="困难二十八", command=self.start_hard_28, bg="#FF9800", fg="black", width=15)
-        self.hard28_btn.grid(row=0, column=3, padx=10)
-        self.draw_roll_btn = tk.Button(self.btn_frame, text="绘卷模式", command=self.start_draw_roll, bg="#9C27B0", fg="black", width=15)
-        self.draw_roll_btn.grid(row=0, column=4, padx=10)
-        self.draw_roll2_btn = tk.Button(self.btn_frame, text="绘卷模式2", command=self.start_draw_roll2, bg="#795548", fg="black", width=15)
-        self.draw_roll2_btn.grid(row=1, column=0, padx=10, pady=8)
-        self.combat8_btn = tk.Button(self.btn_frame, text="阴阳寮突破", command=self.start_combat_option_8, bg="#607D8B", fg="black", width=15)
-        self.combat8_btn.grid(row=1, column=2, padx=10, pady=8)
-        self.arena_btn = tk.Button(self.btn_frame, text="斗技", command=self.start_arena, bg="#E91E63", fg="black", width=15)
-        self.arena_btn.grid(row=1, column=1, padx=10, pady=8)
-        self.zudui_btn = tk.Button(self.btn_frame, text="组队", command=self.start_zudui, bg="#7D5A5A", fg="black", width=15)
-        self.zudui_btn.grid(row=1, column=3, padx=10, pady=8)
-        self.bezudui_btn = tk.Button(self.btn_frame, text="被组队", command=self.start_bezudui, bg="#9E9E9E", fg="black", width=15)
-        self.bezudui_btn.grid(row=1, column=4, padx=10, pady=8)
-        
+        limits = tk.Frame(settings, bg="#FFFFFF")
+        limits.pack(fill=tk.X, padx=18, pady=(0, 15))
+        self._label(limits, "目标轮数", 9).grid(row=0, column=0, sticky="w")
+        self._label(limits, "总时长（分钟）", 9).grid(row=0, column=2, sticky="w", padx=(18, 0))
         self.count = 0  # 初始轮次为 0
         self.break_roll_count = 0  # 结界突破卷计数
-        self.count_label = tk.Label(root, text="已成功运行: 0 轮", font=("微软雅黑", 12, "bold"), fg="#1E90FF")
-        self.roll_label = tk.Label(root, text="结界突破卷: 0/30", font=("微软雅黑", 12, "bold"), fg="#FF4500")
-        # --- 目标轮数设置区 ---
-        limit_frame = tk.Frame(root)
-        limit_frame.pack(pady=5)
-        tk.Label(limit_frame, text="目标轮数 (0表示无限):").grid(row=0, column=0)
-
+        self.menpiao_count = 0  # 门票计数
+        self.menpiao_visible = False  # 防止同一画面重复计数
+        self.menpiao_templates = [
+            get_path("menpiao.png"),
+            get_path("menpiao2.png"),
+            get_path("menpiao3.png"),
+        ]
         self.limit_var = tk.StringVar()
-        self.limit_entry = tk.Entry(limit_frame, textvariable=self.limit_var, width=10)
+        self.limit_entry = tk.Entry(limits, textvariable=self.limit_var, width=8,
+                                    bg="#F5F5F7", relief=tk.FLAT, bd=0)
         self.limit_entry.insert(0, "0")  # 默认 0 轮
-        self.limit_entry.grid(row=0, column=1, padx=5)
-
-        time_frame = tk.Frame(root)
-        time_frame.pack(pady=5)
-        tk.Label(time_frame, text="总时长(分钟，0表示无限):").grid(row=0, column=0)
-
+        self.limit_entry.grid(row=1, column=0, sticky="ew", pady=(4, 0), ipady=6)
         self.time_limit_var = tk.StringVar()
-        self.time_limit_entry = tk.Entry(time_frame, textvariable=self.time_limit_var, width=10)
+        self.time_limit_entry = tk.Entry(limits, textvariable=self.time_limit_var, width=8,
+                                         bg="#F5F5F7", relief=tk.FLAT, bd=0)
         self.time_limit_entry.insert(0, "0")
-        self.time_limit_entry.grid(row=0, column=1, padx=5)
+        self.time_limit_entry.grid(row=1, column=2, sticky="ew", padx=(18, 0),
+                                   pady=(4, 0), ipady=6)
+        limits.columnconfigure(0, weight=1)
+        limits.columnconfigure(2, weight=1)
 
-        self.count_label.pack(pady=5)
-        self.roll_label.pack(pady=2)
+        monitor = self._card(right, "运行监控", "LIVE STATUS")
+        stats = tk.Frame(monitor, bg="#FFFFFF")
+        stats.pack(fill=tk.X, padx=13, pady=(0, 13))
+        self.count_label = self._label(stats, "0 轮", 16, "#0A84FF", True)
+        self.roll_label = self._label(stats, "0/30 突破卷", 16, "#FF9500", True)
+        self.menpiao_label = self._label(stats, "0/50 门票", 16, "#34C759", True)
+        for label in (self.count_label, self.roll_label, self.menpiao_label):
+            label.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5, pady=12)
 
+        self.btn_frame = tk.Frame(monitor, bg="#FFFFFF")
+        self.btn_frame.pack(fill=tk.X, padx=13, pady=(0, 13))
+        self.start_btn = self._button(self.btn_frame, "▶  开始挂机", self.start_task,
+                                      bg="#34C759", fg="#FFFFFF", width=12, row=0, column=0)
+        self.stop_btn = self._button(self.btn_frame, "■  停止运行", self.stop_task,
+                                     bg="#FF3B30", fg="#FFFFFF", width=12, row=0, column=1)
+        self.stop_btn.config(state=tk.DISABLED)
+        self.combat_btn = self._button(self.btn_frame, "结界突破", self.start_combat_option,
+                                       bg="#0A84FF", width=12, row=1, column=0)
+        self.hard28_btn = self._button(self.btn_frame, "困难二十八", self.start_hard_28,
+                                       bg="#5E5CE6", width=12, row=1, column=1)
+        self.draw_roll_btn = self._button(self.btn_frame, "绘卷模式", self.start_draw_roll,
+                                          bg="#AF52DE", width=2, row=2, column=0)
+        self.draw_roll2_btn = self._button(self.btn_frame, "绘卷模式 2", self.start_draw_roll2,
+                                           bg="#AF52DE", width=2, row=2, column=1)
+        self.combat8_btn = self._button(self.btn_frame, "阴阳寮突破", self.start_combat_option_8,
+                                        bg="#5856D6", width=2, row=3, column=0)
+        self.arena_btn = self._button(self.btn_frame, "斗技", self.start_arena,
+                                      bg="#FF2D55", width=2, row=3, column=1)
+        self.zudui_btn = self._button(self.btn_frame, "组队", self.start_zudui,
+                                      bg="#FF9500", width=2, row=4, column=0)
+        self.bezudui_btn = self._button(self.btn_frame, "被组队", self.start_bezudui,
+                                        bg="#8E8E93", width=2, row=4, column=1)
+        self.btn_frame.columnconfigure(0, weight=1)
+        self.btn_frame.columnconfigure(1, weight=1)
 
-
-        # 5. 日志窗口
-        tk.Label(root, text="运行日志:").pack()
-        self.log_area = scrolledtext.ScrolledText(root, width=75, height=25, font=("Consolas", 9))
-        self.log_area.pack(pady=10)
-
-        # 初始化刷新一次设备
-        self.refresh_devices()
+        log_card = tk.Frame(right, bg="#FFFFFF", highlightbackground="#E5E5EA",
+                            highlightthickness=1, bd=0)
+        log_card.pack(fill=tk.BOTH, expand=True)
+        log_header = tk.Frame(log_card, bg="#FFFFFF")
+        log_header.pack(fill=tk.X, padx=18, pady=(15, 8))
+        self._label(log_header, "运行日志", 13, "#1D1D1F", True).pack(side=tk.LEFT)
+        self._label(log_header, "后台线程实时输出", 9, "#86868B").pack(side=tk.RIGHT)
+        self.log_area = scrolledtext.ScrolledText(
+            log_card, font=("Consolas", 9), bg="#1D1D1F", fg="#F5F5F7",
+            insertbackground="#FFFFFF", selectbackground="#0A84FF",
+            relief=tk.FLAT, bd=0, padx=12, pady=12, wrap=tk.WORD)
+        self.log_area.pack(fill=tk.BOTH, expand=True, padx=13, pady=(0, 13))
 
     # ================= 智能化工具函数 =================
     def log(self, message):
@@ -282,6 +396,9 @@ class GameBotGUI:
 
     def start_total_time_control(self):
         self.task_start_time = time.time()
+        self.menpiao_count = 0
+        self.menpiao_visible = False
+        self.menpiao_label.config(text="门票: 0/50")
         try:
             total_minutes = float(self.time_limit_var.get())
         except ValueError:
@@ -573,6 +690,37 @@ class GameBotGUI:
             
         return False
 
+    def scan_menpiao(self, screen, confidence=0.8):
+        """轮询三种门票图标，每个连续出现的画面只计数一次。"""
+        found_template = None
+        for template_path in self.menpiao_templates:
+            if self.find_and_tap(
+                template_path,
+                confidence=confidence,
+                do_tap=True,
+                screen=screen,
+            ):
+                found_template = template_path
+                break
+
+        found = found_template is not None
+        if found and not self.menpiao_visible:
+            if self.menpiao_count < 50:
+                self.menpiao_count += 1
+                self.root.after(
+                    0,
+                    lambda count=self.menpiao_count: self.menpiao_label.config(
+                        text=f"门票: {count}/50"
+                    ),
+                )
+                self.log(
+                    f"扫描到门票({os.path.basename(found_template)})，"
+                    f"第 {self.menpiao_count}/50 张"
+                )
+            elif self.menpiao_count == 50:
+                self.log("门票已达到50张上限，不再计数")
+        self.menpiao_visible = found
+
     def wait_for_image(self, template_path, timeout=60, confidence=0.5, do_tap=False, interval=1.0):
         start_t = time.time()
         while self.is_running and time.time() - start_t < timeout:
@@ -587,7 +735,7 @@ class GameBotGUI:
             try:
                 task_accept_img = get_path("task-accept.png")
                 # 使用较高置信度，若命中则直接点击（find_and_tap 会在命中时记录日志）
-                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True):
+                if self.find_and_tap(task_accept_img, confidence=0.7, do_tap=True, screen=current_screen):
                     time.sleep(0.6)
                     try:
                         # 在主线程弹出提示，避免在工作线程直接调用 tkinter
@@ -596,6 +744,9 @@ class GameBotGUI:
                         pass
             except Exception:
                 pass
+
+            # 使用本轮已有截图扫描门票，避免额外请求模拟器截图
+            self.scan_menpiao(current_screen)
 
             # 检测目标图片，同样传入 current_screen
             if self.find_and_tap(template_path, confidence=confidence, do_tap=False, screen=current_screen):
@@ -1628,9 +1779,46 @@ class GameBotGUI:
                 break
 
 
+class AppManager:
+    """管理多个相互独立的助手窗口，每个窗口绑定一个 ADB 设备。"""
+
+    def __init__(self, root):
+        self.root = root
+        self.instances = []
+        self.root.title("Onmyoji Auto · 多开控制台")
+        self.root.protocol("WM_DELETE_WINDOW", self.close_all)
+        self.open_instance(root)
+
+    def open_instance(self, window=None):
+        if window is None:
+            window = tk.Toplevel(self.root)
+        app = GameBotGUI(window, manager=self)
+        self.instances.append(app)
+        window.lift()
+        window.focus_force()
+        return app
+
+    def close_instance(self, app):
+        if app in self.instances:
+            self.instances.remove(app)
+        if app.root is not self.root and app.root.winfo_exists():
+            app.root.destroy()
+        if not self.instances and self.root.winfo_exists():
+            self.root.destroy()
+
+    def close_all(self):
+        for app in list(self.instances):
+            app.is_running = False
+            if app.root is not self.root and app.root.winfo_exists():
+                app.root.destroy()
+        self.instances.clear()
+        if self.root.winfo_exists():
+            self.root.destroy()
+
+
 if __name__ == "__main__":
     from tkinter import messagebox
 
     root = tk.Tk()
-    app = GameBotGUI(root)
+    manager = AppManager(root)
     root.mainloop()
