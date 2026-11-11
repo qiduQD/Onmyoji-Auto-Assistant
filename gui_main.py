@@ -1295,7 +1295,7 @@ class GameBotGUI:
 
         self.log("等待超鬼王入口...")
         if not self.wait_for_image(
-                get_path("find.png"), timeout=10,
+                get_path("find.png"), timeout=30,
                 confidence=conf_val, do_tap=True):
             self.log("未找到 find.png，检测是否已经召唤鬼王")
 
