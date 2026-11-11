@@ -92,29 +92,11 @@ class GameBotGUI:
         self.manager = manager
         # 初始化图片缓存字典
         self.image_cache = {}
-        self.root.title("Onmyoji Auto · 阴阳师助手")
-        # --- 设置窗口图标（兼容 Windows/macOS） ---
-        try:
-            if platform.system() == "Windows":
-                icon_path = get_path("app.ico")
-                self.root.iconbitmap(icon_path)
-            else:
-                # Tk 在 macOS 上对 .ico 支持有限，优先尝试 png 作为窗口图标
-                icon_png = get_path("app.png")
-                if os.path.exists(icon_png):
-                    icon_img = tk.PhotoImage(file=icon_png)
-                    self.root.iconphoto(True, icon_img)
-                    # 保留引用，避免被垃圾回收导致图标失效
-                    self._icon_img = icon_img
-                else:
-                    icon_ico = get_path("app.ico")
-                    if os.path.exists(icon_ico):
-                        self.root.iconbitmap(icon_ico)
-        except Exception as e:
-            # 如果没有图标文件，程序也会正常运行，不会崩溃
-            print(f"窗口图标加载失败: {e}")
-        self.root.geometry("1180x820")
-        self.root.minsize(980, 680)
+        if not manager:
+            self.root.title("Onmyoji Auto · 阴阳师助手")
+            self._set_window_icon()
+            self.root.geometry("1080x720")
+            self.root.minsize(900, 600)
         self.root.configure(bg="#F5F5F7")
         self.is_running = False
         self.devices = []
@@ -131,14 +113,27 @@ class GameBotGUI:
 
         # 初始化刷新一次设备
         self.refresh_devices()
-        self.root.protocol("WM_DELETE_WINDOW", self.close_window)
+        if not manager:
+            self.root.protocol("WM_DELETE_WINDOW", self.close_window)
+
+    def _set_window_icon(self):
+        try:
+            if platform.system() == "Windows":
+                icon_path = get_path("app.ico")
+                if os.path.exists(icon_path):
+                    self.root.iconbitmap(icon_path)
+            else:
+                icon_png = get_path("app.png")
+                if os.path.exists(icon_png):
+                    icon_img = tk.PhotoImage(file=icon_png)
+                    self.root.iconphoto(True, icon_img)
+                    self._icon_img = icon_img
+        except Exception as e:
+            print(f"窗口图标加载失败: {e}")
 
     def close_window(self):
         self.is_running = False
         if self.manager:
-            if self.root is self.manager.root:
-                self.manager.close_all()
-                return
             self.manager.close_instance(self)
         else:
             self.root.destroy()
@@ -175,8 +170,9 @@ class GameBotGUI:
         button = tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
                            activebackground=bg, activeforeground=fg,
                            relief=tk.FLAT, bd=0, cursor="hand2",
+                           highlightthickness=0,
                            font=("微软雅黑", 9, "bold"), width=width,
-                           padx=5, pady=5)
+                           padx=8, pady=7)
         button.grid(row=row, column=column, columnspan=colspan,
                     padx=5, pady=5, sticky="ew")
         return button
@@ -184,31 +180,42 @@ class GameBotGUI:
     def _build_ui(self):
         root = self.root
         shell = tk.Frame(root, bg="#F5F5F7")
-        shell.pack(fill=tk.BOTH, expand=True, padx=24, pady=20)
+        shell.pack(fill=tk.BOTH, expand=True, padx=16, pady=14)
 
         header = tk.Frame(shell, bg="#F5F5F7")
-        header.pack(fill=tk.X, pady=(0, 18))
+        header.pack(fill=tk.X, pady=(0, 12))
         title_box = tk.Frame(header, bg="#F5F5F7")
         title_box.pack(side=tk.LEFT)
         self._label(title_box, "阴阳师助手", 24, "#1D1D1F", True).pack(anchor="w")
         self._label(title_box, "ONMYOJI AUTO  ·  视觉识别与 ADB 自动化", 9,
                     "#86868B").pack(anchor="w", pady=(3, 0))
-        if self.manager:
-            new_instance = tk.Button(header, text="＋ 新建实例",
-                                     command=self.manager.open_instance,
-                                     bg="#0A84FF", fg="#FFFFFF",
-                                     activebackground="#0077ED",
-                                     activeforeground="#FFFFFF", relief=tk.FLAT,
-                                     bd=0, cursor="hand2",
-                                     font=("微软雅黑", 10, "bold"),
-                                     padx=14, pady=8)
-            new_instance.pack(side=tk.RIGHT, pady=4)
-
         body = tk.Frame(shell, bg="#F5F5F7")
         body.pack(fill=tk.BOTH, expand=True)
-        left = tk.Frame(body, bg="#F5F5F7", width=480)
-        left.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 16))
-        left.pack_propagate(False)
+        left_shell = tk.Frame(body, bg="#F5F5F7", width=400)
+        left_shell.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 16))
+        left_shell.pack_propagate(False)
+        left_canvas = tk.Canvas(left_shell, bg="#F5F5F7", highlightthickness=0,
+                                bd=0)
+        left_scrollbar = ttk.Scrollbar(left_shell, orient=tk.VERTICAL,
+                                       command=left_canvas.yview)
+        left = tk.Frame(left_canvas, bg="#F5F5F7")
+        left_window = left_canvas.create_window((0, 0), window=left, anchor="nw")
+        left_canvas.configure(yscrollcommand=left_scrollbar.set)
+        left_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        left_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def update_left_scroll_region(_event=None):
+            left_canvas.configure(scrollregion=left_canvas.bbox("all"))
+            left_canvas.itemconfigure(left_window, width=left_canvas.winfo_width())
+
+        left.bind("<Configure>", update_left_scroll_region)
+        left_canvas.bind("<Configure>", update_left_scroll_region)
+
+        def scroll_left(event):
+            left_canvas.yview_scroll(int(-event.delta / 120), "units")
+
+        left_canvas.bind("<MouseWheel>", scroll_left)
+        left.bind("<MouseWheel>", scroll_left)
         right = tk.Frame(body, bg="#F5F5F7")
         right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
@@ -390,6 +397,13 @@ class GameBotGUI:
             insertbackground="#FFFFFF", selectbackground="#0A84FF",
             relief=tk.FLAT, bd=0, padx=12, pady=12, wrap=tk.WORD)
         self.log_area.pack(fill=tk.BOTH, expand=True, padx=13, pady=(0, 13))
+
+        def bind_left_mousewheel(widget):
+            widget.bind("<MouseWheel>", scroll_left, add="+")
+            for child in widget.winfo_children():
+                bind_left_mousewheel(child)
+
+        bind_left_mousewheel(left)
 
     # ================= 智能化工具函数 =================
     def log(self, message):
@@ -1890,36 +1904,163 @@ class GameBotGUI:
 
 
 class AppManager:
-    """管理多个相互独立的助手窗口，每个窗口绑定一个 ADB 设备。"""
+    """在单一主窗口中管理多个相互独立的助手实例。"""
 
     def __init__(self, root):
         self.root = root
         self.instances = []
+        self.next_instance_id = 1
         self.root.title("Onmyoji Auto · 多开控制台")
-        self.root.protocol("WM_DELETE_WINDOW", self.close_all)
-        self.open_instance(root)
+        self.root.geometry("1080x720")
+        self.root.minsize(900, 600)
+        self.root.configure(bg="#F5F5F7")
+        self._set_window_icon()
 
-    def open_instance(self, window=None):
-        if window is None:
-            window = tk.Toplevel(self.root)
-        app = GameBotGUI(window, manager=self)
+        self._setup_styles()
+        shell = tk.Frame(root, bg="#F5F5F7")
+        shell.pack(fill=tk.BOTH, expand=True, padx=14, pady=14)
+
+        sidebar = tk.Frame(shell, bg="#FFFFFF", width=230,
+                           highlightbackground="#E5E5EA",
+                           highlightthickness=1)
+        sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 12))
+        sidebar.pack_propagate(False)
+        tk.Label(sidebar, text="阴阳师助手", bg="#FFFFFF", fg="#1D1D1F",
+                 font=("微软雅黑", 18, "bold")).pack(anchor="w",
+                                                     padx=18, pady=(20, 2))
+        tk.Label(sidebar, text="实例设置", bg="#FFFFFF", fg="#86868B",
+                 font=("微软雅黑", 9)).pack(anchor="w", padx=18, pady=(0, 18))
+        self.instance_status = tk.Label(
+            sidebar, text="0 个实例", bg="#F5F5F7", fg="#6E6E73",
+            font=("微软雅黑", 9), anchor="w", padx=12, pady=8)
+        self.instance_status.pack(fill=tk.X, padx=12, pady=(0, 10))
+        tk.Label(sidebar, text="运行实例", bg="#FFFFFF", fg="#6E6E73",
+                 font=("微软雅黑", 9, "bold")).pack(anchor="w",
+                                                    padx=18, pady=(2, 6))
+        self.instance_list = tk.Listbox(
+            sidebar, bg="#F5F5F7", fg="#1D1D1F",
+            selectbackground="#DCEBFF", selectforeground="#0A84FF",
+            activestyle="none", relief=tk.FLAT, bd=0,
+            highlightthickness=0, font=("微软雅黑", 10),
+            height=8)
+        self.instance_list.pack(fill=tk.BOTH, expand=True, padx=12)
+        self.instance_list.bind("<<ListboxSelect>>", self._on_instance_selected)
+
+        sidebar_actions = tk.Frame(sidebar, bg="#FFFFFF")
+        sidebar_actions.pack(fill=tk.X, padx=12, pady=14)
+        self._sidebar_button(sidebar_actions, "＋  新建实例",
+                             self.open_instance, "#0A84FF", "#FFFFFF").pack(
+                                 fill=tk.X, pady=(0, 7))
+        self._sidebar_button(sidebar_actions, "关闭当前实例",
+                             self.close_current, "#E5E5EA", "#1D1D1F").pack(
+                                 fill=tk.X)
+
+        self.content = tk.Frame(shell, bg="#F5F5F7")
+        self.content.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        self.root.protocol("WM_DELETE_WINDOW", self.close_all)
+        self.open_instance()
+
+    def _sidebar_button(self, parent, text, command, bg, fg):
+        return tk.Button(parent, text=text, command=command, bg=bg, fg=fg,
+                         activebackground=bg, activeforeground=fg,
+                         relief=tk.FLAT, bd=0, highlightthickness=0,
+                         cursor="hand2", font=("微软雅黑", 9, "bold"),
+                         padx=8, pady=9)
+
+    def _setup_styles(self):
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure("TNotebook", background="#F5F5F7", borderwidth=0)
+
+    def _set_window_icon(self):
+        try:
+            if platform.system() == "Windows":
+                icon_path = get_path("app.ico")
+                if os.path.exists(icon_path):
+                    self.root.iconbitmap(icon_path)
+            else:
+                icon_png = get_path("app.png")
+                if os.path.exists(icon_png):
+                    icon_img = tk.PhotoImage(file=icon_png)
+                    self.root.iconphoto(True, icon_img)
+                    self._icon_img = icon_img
+        except Exception as e:
+            print(f"窗口图标加载失败: {e}")
+
+    def open_instance(self):
+        instance_number = self.next_instance_id
+        self.next_instance_id += 1
+        frame = tk.Frame(self.content, bg="#F5F5F7")
+        app = GameBotGUI(frame, manager=self)
         self.instances.append(app)
-        window.lift()
-        window.focus_force()
+        app.instance_number = instance_number
+        self._refresh_instance_list()
+        self._show_instance(app)
+        self._update_instance_status()
         return app
 
     def close_instance(self, app):
         if app in self.instances:
             self.instances.remove(app)
-        if app.root is not self.root and app.root.winfo_exists():
+        if app.root.winfo_exists():
             app.root.destroy()
-        if not self.instances and self.root.winfo_exists():
-            self.root.destroy()
+        if self.instances:
+            self._show_instance(self.instances[-1])
+        self._update_instance_status()
+        if not self.instances:
+            self.open_instance()
+
+    def close_current(self):
+        if not self.instances:
+            return
+        if self.active_instance in self.instances:
+            self.active_instance.is_running = False
+            self.close_instance(self.active_instance)
+
+    def _on_instance_selected(self, _event=None):
+        selection = self.instance_list.curselection()
+        if selection and selection[0] < len(self.instances):
+            self._show_instance(self.instances[selection[0]])
+
+    def _show_instance(self, app):
+        self.active_instance = app
+        for instance in self.instances:
+            instance.root.pack_forget()
+        app.root.pack(fill=tk.BOTH, expand=True)
+        self._refresh_instance_list()
+        self._update_instance_status()
+
+    def _refresh_instance_list(self):
+        if not hasattr(self, "instance_list"):
+            return
+        active_index = self.instances.index(self.active_instance) \
+            if hasattr(self, "active_instance") and self.active_instance in self.instances else 0
+        self.instance_list.delete(0, tk.END)
+        for app in self.instances:
+            device = app.device_var.get() or "未连接设备"
+            status = "运行中" if app.is_running else "已停止"
+            self.instance_list.insert(tk.END,
+                                      f"实例 {app.instance_number}  ·  {status}\n  {device}")
+        if self.instances:
+            self.instance_list.selection_set(active_index)
+            self.instance_list.activate(active_index)
+
+    def _update_instance_status(self):
+        if not hasattr(self, "instance_status"):
+            return
+        count = len(self.instances)
+        active = getattr(self, "active_instance", None)
+        device = active.device_var.get() if active else ""
+        suffix = f" · {device}" if device else ""
+        self.instance_status.config(text=f"{count} 个实例{suffix}")
 
     def close_all(self):
         for app in list(self.instances):
             app.is_running = False
-            if app.root is not self.root and app.root.winfo_exists():
+            if app.root.winfo_exists():
                 app.root.destroy()
         self.instances.clear()
         if self.root.winfo_exists():
