@@ -303,6 +303,7 @@ class GameBotGUI:
         self.level_menu.pack(fill=tk.X, pady=(4, 0))
 
         self.rest_event_enabled = tk.BooleanVar(value=True)
+        self.daily_confirm_enabled = tk.BooleanVar(value=False)
         threshold = tk.Frame(settings, bg="#FFFFFF")
         threshold.pack(fill=tk.X, padx=18, pady=(0, 8))
         self._label(threshold, "识别阈值", 9).pack(anchor="w")
@@ -313,6 +314,17 @@ class GameBotGUI:
                                     length=270)
         self.conf_slider.set(0.8)
         self.conf_slider.pack(fill=tk.X, pady=(0, 3))
+
+        self.daily_confirm_checkbutton = tk.Checkbutton(
+            settings,
+            text="每日首次确认",
+            variable=self.daily_confirm_enabled,
+            bg="#FFFFFF",
+            activebackground="#FFFFFF",
+            anchor="w",
+            font=("微软雅黑", 9),
+        )
+        self.daily_confirm_checkbutton.pack(fill=tk.X, padx=14, pady=(0, 8))
 
         limits = tk.Frame(settings, bg="#FFFFFF")
         limits.pack(fill=tk.X, padx=18, pady=(0, 15))
@@ -825,6 +837,9 @@ class GameBotGUI:
             return False
         time.sleep(3)
 
+        if not self.wait_for_image(get_path("unlock.png"), timeout=1, confidence=0.9, do_tap=True):
+            self.log("未找到 unlock 按钮，阵容已锁定")
+            time.sleep(0.3)
 
         base_slots = [
             (523, 584), (931, 584), (1325, 584),
@@ -843,18 +858,15 @@ class GameBotGUI:
                 self.log("脚本已停止，退出结界突破。")
                 return False
 
-            self.log(f"点击第 {idx} 个位置: ({x},{y})")
-            self.swipe_tap(x, y)
-            time.sleep(1.2)
-
-            # 等待出现 attack 按钮并进入战斗
-            if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
-                self.log("未找到 attack 按钮，跳过此位置")
-                continue
-
             # 普通8次逻辑
             if idx < 9:
-                
+                self.log(f"点击第 {idx} 个位置: ({x},{y})")
+                self.swipe_tap(x, y)
+                time.sleep(0.5)
+                # 等待出现 attack 按钮并进入战斗
+                if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
+                    self.log("未找到 attack 按钮，跳过此位置")
+                    continue
                 self.wait_for_image(get_path("finish_mark_300.png"), timeout=60, confidence=conf_val, do_tap=True)
                 time.sleep(2)
                 self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
@@ -864,32 +876,69 @@ class GameBotGUI:
 
             # 第九次特殊逻辑 (额外处理)
             self.log("第九次特殊逻辑：4 次返回确认 + 重启 + 准备战斗")
+            if not self.wait_for_image(get_path("lock.png"), timeout=3, confidence=0.9, do_tap=True):
+                self.log("未找到 lock 按钮，阵容解锁")
+                time.sleep(0.2)
+            self.log(f"点击第 {idx} 个位置: ({x},{y})")
+            self.swipe_tap(x, y)
+            time.sleep(0.5)
+            if not self.wait_for_image(get_path("attack.png"), timeout=3, confidence=conf_val, do_tap=True):
+                self.log("未找到 attack 按钮，跳过此位置")
+                self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=conf_val, do_tap=True)
+                return True
             for round_i in range(1, 5):
                 if not self.is_running:
                     return False
                 time.sleep(2)
                 self.tap_cancel()  # 点击左上角返回
                 time.sleep(1)
-                self.tap_confirm_2()  # 点击确认返回
+                self.wait_for_image(get_path("daliy_confirm_button.png"), timeout=10, confidence=conf_val, do_tap=True)
                 time.sleep(1)
                 self.wait_for_image(get_path("restart.png"), timeout=10, confidence=conf_val, do_tap=True)
-                if self.count == 0:
+                if self.count == 0 and self.daily_confirm_enabled.get():
                     self.wait_for_image(get_path("daliy_confirm.png"), timeout=1, confidence=conf_val, do_tap=False)
                     self.tap_confirm_1()  # 点击每日首次确认
                     self.wait_for_image(get_path("daliy_confirm_button.png"), timeout=1, confidence=conf_val, do_tap=True)
                     self.count += 1
                 time.sleep(1)
                 self.log(f"第九次循环第 {round_i} 轮: 返回/确认/重启 完成")
-
-            
+            self.wait_for_image(get_path("prepare.png"), timeout=3, confidence=conf_val, do_tap=True)            
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=120, confidence=conf_val, do_tap=True)
             time.sleep(2)
             self.wait_for_image(get_path("finish_mark_300.png"), timeout=5, confidence=conf_val, do_tap=True)
             self.log("第九次位置战斗结束，结界突破完成")
 
-        self.log("结界突破整体完成")
-        time.sleep(2)
-        self.wait_for_image(get_path("cancel.png"), timeout=10, confidence=conf_val, do_tap=True)
+        time.sleep(3)
+        cleanup_deadline = time.time() + 10
+        while self.is_running and time.time() < cleanup_deadline:
+            if self.check_total_time_limit():
+                return False
+
+            current_screen = self.get_screenshot()
+            if current_screen is None:
+                time.sleep(0.5)
+                continue
+
+            if self.find_and_tap(
+                get_path("break.png"),
+                confidence=0.7,
+                do_tap=False,
+                screen=current_screen,
+            ):
+                self.log("检测到 break.png，一轮结界突破完成")
+                break
+
+            if self.find_and_tap(
+                get_path("cancel.png"),
+                confidence=conf_val,
+                do_tap=True,
+                screen=current_screen,
+            ):
+                time.sleep(0.8)
+            else:
+                time.sleep(0.5)
+        else:
+            self.log("10秒内未检测到 break.png，停止清理返回")
         return True
 
     def combat_option_logic(self):
